@@ -125,10 +125,10 @@ func parseStubFileForExpectedStructs(stubFilePath string) (map[string]map[string
 }
 
 // GenerateCode takes the YAML description, generates Go code, and handles imports dynamically.
-func GenerateCode(yamlFile, outputDir, packageName string) error {
+func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error {
 	log.Printf("Starting code generation for file: %s, outputting to: %s (package %s)", yamlFile, outputDir, packageName)
 
-	stubFilePath := filepath.Join(outputDir, "fullbmp_stubs.go") // Define stub path early
+	stubFilePath := filepath.Join(outputDir, targetStubName) // Define stub path early
 
 	// --- START DYNAMIC EXPECTATION PARSING ---
 	log.Printf("Parsing stub file %s for expected structure...", stubFilePath)
@@ -177,6 +177,9 @@ func GenerateCode(yamlFile, outputDir, packageName string) error {
 	// 3. Parse the main template once, registering custom functions
 	tmpl := template.New("struct").Funcs(template.FuncMap{
 		"atoi": atoi,
+		"isExpressionLength": func(f structs.Field) bool {
+			return f.IsExpressionLength()
+		},
 	})
 	tmpl, err = tmpl.Parse(StructTemplate)
 	if err != nil {
@@ -225,6 +228,8 @@ func GenerateCode(yamlFile, outputDir, packageName string) error {
 				needsFmt = true
 				fieldUsesErrWrite = true // Write always uses err for []byte
 				if field.Length != "" {
+					// Both fixed and expression lengths use err in Read
+					fieldUsesErrRead = true
 					// Check if length is valid int > 0 for ReadFull
 					if _, errConv := strconv.Atoi(field.Length); errConv == nil && field.Length != "0" {
 						fieldUsesErrRead = true // io.ReadFull uses err
@@ -234,14 +239,13 @@ func GenerateCode(yamlFile, outputDir, packageName string) error {
 				// Keep the existing logic for logging warnings/info based on Length for the Read method perspective
 				if field.Length != "" {
 					// Check if length is valid int
-					if _, errConv := strconv.Atoi(field.Length); errConv != nil && field.Length != "0" {
+					if field.Length == "" {
+						// Log warning about missing length
+						log.Printf("Warning: []byte field '%s' in struct '%s' has no length specified. Read/Write logic might be incomplete.", field.Name, structName)
+					} else if _, errConv := strconv.Atoi(field.Length); errConv != nil {
 						// Log info about expression length
 						log.Printf("Info: []byte field '%s' uses expression length '%s'. Generated code assumes dependencies are met.", field.Name, field.Length)
 					}
-					// No need to check if length is 0 here for fieldUsesErr anymore
-				} else {
-					// Log warning about missing length for Read
-					log.Printf("Warning: []byte field '%s' in struct '%s' has no length specified. Read/Write logic might be incomplete.", field.Name, structName)
 				}
 			default:
 				// Unsupported type path returns early - no err use here

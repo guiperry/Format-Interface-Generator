@@ -26,5 +26,5 @@ structs:
         description: Image height
       - name: PixelData
         type: "[]byte"
-        stringLength: "Width * Height * 3"
+        length: "Width * Height * 3"
         description: RGB pixel data

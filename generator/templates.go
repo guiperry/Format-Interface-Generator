@@ -25,17 +25,27 @@ func (s *{{.StructName}}) Read(r io.Reader) error {
 	// Read {{$field.Name}} ({{$field.Type}})
 	{{if eq $field.Type "string"}}
 		{{if $field.Length}}
-			{{$length := $field.Length | atoi}}
-			{{if gt $length 0}}
+			{{if isExpressionLength $field}}
+	// Dynamic length string field: {{$field.Name}}
+	size := int({{$field.Length}}) // Calculate length from expression
+	b = make([]byte, size)
+	_, err = io.ReadFull(r, b) // Uses err
+	if err != nil {
+		return fmt.Errorf("reading {{$field.Name}} (string[dynamic length {{$field.Length}}]): %w", err)
+	}
+	s.{{$field.Name}} = string(b)
+			{{else}}
+				{{$length := $field.Length | atoi}}
+				{{if gt $length 0}}
 	b = make([]byte, {{$length}})
 	_, err = io.ReadFull(r, b) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading {{$field.Name}} (string[{{$length}}]): %w", err)
 	}
 	s.{{$field.Name}} = string(b)
-			{{else}}
-	// TODO: Implement reading string field {{$field.Name}} with dynamic length: {{$field.Length}}
-	return fmt.Errorf("reading string field {{$field.Name}} with dynamic length '{{$field.Length}}' is not automatically generated") // Returns early
+				{{else}}
+	return fmt.Errorf("invalid length {{$length}} for string field {{$field.Name}}") // Returns early
+				{{end}}
 			{{end}}
 		{{else}}
 	return fmt.Errorf("cannot automatically read string field {{$field.Name}} without a defined length") // Returns early
@@ -64,16 +74,25 @@ func (s *{{.StructName}}) Read(r io.Reader) error {
 	}
 	{{else if eq $field.Type "[]byte"}}
 		{{if $field.Length}}
-			{{$length := $field.Length | atoi}}
-			{{if gt $length 0}}
+			{{if isExpressionLength $field}}
+	// Dynamic length []byte field: {{$field.Name}}
+	size := int({{$field.Length}}) // Calculate length from expression
+	s.{{$field.Name}} = make([]byte, size)
+	_, err = io.ReadFull(r, s.{{$field.Name}}) // Uses err
+	if err != nil {
+		return fmt.Errorf("reading {{$field.Name}} ([]byte[dynamic length {{$field.Length}}]): %w", err)
+	}
+			{{else}}
+				{{$length := $field.Length | atoi}}
+				{{if gt $length 0}}
 	s.{{$field.Name}} = make([]byte, {{$length}})
 	_, err = io.ReadFull(r, s.{{$field.Name}}) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading {{$field.Name}} ([]byte[{{$length}}]): %w", err)
 	}
-			{{else}}
-	// TODO: Implement reading []byte field {{$field.Name}} with dynamic length: {{$field.Length}}
-	return fmt.Errorf("reading []byte field {{$field.Name}} with dynamic length '{{$field.Length}}' is not automatically generated") // Returns early
+				{{else}}
+	return fmt.Errorf("invalid length {{$length}} for []byte field {{$field.Name}}") // Returns early
+				{{end}}
 			{{end}}
 		{{else}}
 	// This field cannot be read automatically.

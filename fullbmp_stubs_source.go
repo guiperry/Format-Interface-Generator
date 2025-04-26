@@ -1,6 +1,6 @@
 // /home/gperry/Documents/GitHub/cloud-equities/FormatModule/fullbmp/fullbmp_stubs.go
 // IMPORTANT: This file is a temporary stub and MUST be overwritten by the code generator.
-package fullbmp
+package main
 
 import "io"
 

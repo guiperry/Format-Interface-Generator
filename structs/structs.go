@@ -21,13 +21,8 @@ type Field struct {
 	Type        string `yaml:"type"`
 	Description string `yaml:"description"`
 	// Length can be a number (as string) or an expression (e.g., "Width*Height*3")
-	// It's primarily used for fixed-size strings or byte slices.
+	// It's used for fixed-size strings, byte slices, or dynamic lengths
 	Length string `yaml:"length,omitempty"`
-	// We might need more fields later if we support complex array logic,
-	// but let's keep it simple for now.
-	// isArray, arrayLengthField, stringLength removed for clarity unless needed
-	StringLength string `yaml:"stringLength,omitempty"`
-	// isArray bool `yaml:"isArray,omitempty"`
 	
 
 }
@@ -38,25 +33,38 @@ func (f *Field) GetLength() (int, error) {
 		return 0, nil
 	}
 
-	// Convert Length to an integer
-	length, err := strconv.Atoi(f.Length)
-	if err != nil {
-		return 0, fmt.Errorf("invalid length for field %s: %w", f.Name, err)
+	// First try to convert Length to an integer (for fixed lengths)
+	if length, err := strconv.Atoi(f.Length); err == nil {
+		return length, nil
 	}
 
-	return length, nil
+	// If not a number, assume it's an expression that will be evaluated at runtime
+	return 0, nil
 }
-func (f *Field) GetStringLength() (int, error) {
-	// If StringLength is empty, return 0
-	if f.StringLength == "" {
-		return 0, nil
-	}
 
-	// Convert StringLength to an integer
-	stringLength, err := strconv.Atoi(f.StringLength)
-	if err != nil {
-		return 0, fmt.Errorf("invalid string length for field %s: %w", f.Name, err)
+// IsExpressionLength returns true if the length is an expression (not a fixed number)
+func (f *Field) IsExpressionLength() bool {
+	if f.Length == "" {
+		return false
 	}
-
-	return stringLength, nil
+	_, err := strconv.Atoi(f.Length)
+	return err != nil
+}
+// Validate checks if required fields are present and valid
+func (f *Field) Validate() error {
+	if f.Name == "" {
+		return fmt.Errorf("field name cannot be empty")
+	}
+	if f.Type == "" {
+		return fmt.Errorf("field %s: type cannot be empty", f.Name)
+	}
+	
+	// For []byte and string types, Length is required
+	if f.Type == "[]byte" || f.Type == "string" {
+		if f.Length == "" {
+			return fmt.Errorf("field %s (%s): length must be specified", f.Name, f.Type)
+		}
+	}
+	
+	return nil
 }

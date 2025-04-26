@@ -33,13 +33,15 @@ func (s *FileHeader) Read(r io.Reader) error {
 	
 		
 			
-			
+				
+				
 	b = make([]byte, 2)
 	_, err = io.ReadFull(r, b) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading Signature (string[2]): %w", err)
 	}
 	s.Signature = string(b)
+				
 			
 		
 	
