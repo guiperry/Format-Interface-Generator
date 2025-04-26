@@ -37,7 +37,7 @@ Let's break down what the interface code is doing at a more granular level:
 
 1.  **Description:** First, you create a YAML or XML file (`.yml` or `.xml`) which *describes* the binary structure of the data.
 
-2.  **Parsing:** The description file goes through the parser to read the various properties, and create a structured list of fields with their corresponding datatypes.
+2.  **Parsing:** The description file goes through the parser to read the various properties, and creates a structured list of fields with their corresponding datatypes.
 
 3.  **Interpretation:** The code generator (Go code using template) is then able to use these descriptors from the parser to create new Go files. These new Go files will:
     *   Create the structs based on the `.yml` and `.xml` properties

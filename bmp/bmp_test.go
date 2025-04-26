@@ -1,4 +1,4 @@
-package main
+package bmp_test
 
 import (
 	"bytes" // Import bytes package for comparison

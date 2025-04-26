@@ -2,7 +2,7 @@ package generator
 
 import (
 	"bytes"
-	"errors"
+	"go/format"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -55,7 +55,7 @@ func parseStubFileForExpectedStructs(stubFilePath string) (map[string]ExpectedSt
 	// Parse the Go source file
 	node, err := parser.ParseFile(fset, stubFilePath, nil, parser.ParseComments)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("failed to parse stub file %s: %v", stubFilePath, err))
+		return nil, fmt.Errorf("failed to parse stub file %s: %w", stubFilePath, err)
 	}
 
 	// Inspect the AST
@@ -138,6 +138,19 @@ func parseStubFileForExpectedStructs(stubFilePath string) (map[string]ExpectedSt
 	return expected, nil
 }
 
+// isValidLengthExpression performs basic checks on a potential length expression.
+// Returns true if it passes basic sanity checks, false otherwise.
+// This is NOT a full Go expression parser.
+func isValidLengthExpression(expr string) bool {
+	trimmed := strings.TrimSpace(expr)
+	if trimmed == "" || trimmed == "..." {
+		return false // Empty or placeholder is invalid here
+	}
+	// Add more basic checks if needed, e.g., for invalid characters
+	// For now, we assume if it's not empty or "..." and not an integer, it's intended as an expression.
+	return true
+}
+
 // GenerateCode takes the YAML description, generates Go code, and handles imports dynamically.
 func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error {
 	log.Printf("Starting code generation for file: %s, outputting to: %s (package %s)", yamlFile, outputDir, packageName)
@@ -148,11 +161,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 	log.Printf("Parsing stub file %s for expected structure...", stubFilePath)
 	expectedStructs, err := parseStubFileForExpectedStructs(stubFilePath)
 	if err != nil {
-		// If parsing fails (e.g., file not found), log a warning but maybe continue?
-		// Or make it a fatal error depending on your workflow.
-		// For now, let's make it non-fatal but log prominently.
 		log.Printf("Warning: Failed to parse stub file '%s' to build expectations: %v. Proceeding without validation.", stubFilePath, err)
-		// Optionally clear the map if parsing failed partially
 		expectedStructs = make(map[string]ExpectedStruct) // Ensure it's empty if parsing failed
 	} else if len(expectedStructs) > 0 {
 		log.Println("Successfully parsed stub file for expectations.")
@@ -183,49 +192,114 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 	}
 	log.Println("Successfully unmarshaled YAML data.")
 
-	// Validate YAML against stub expectations if available
-	if len(expectedStructs) > 0 {
-		for structName, structDef := range fileFormat.Structs {
-			if expected, exists := expectedStructs[structName]; exists {
-				// Check for extra fields in YAML that aren't in stub
-				for _, field := range structDef.Fields {
-					if _, exists := expected.FieldTypes[field.Name]; !exists {
-						log.Printf("Warning: Field '%s' in struct '%s' is not present in stub file", field.Name, structName)
+	// --- START YAML VALIDATION ---
+	log.Println("Validating YAML structure definitions...")
+	for structName, structDef := range fileFormat.Structs {
+		for _, field := range structDef.Fields {
+			// Validate Length field based on Type
+			switch field.Type {
+			case "string", "[]byte":
+				if field.Length == "" {
+					// Strings and byte slices generally need a length for automatic reading/writing
+					// Allow conditional fields to potentially skip length, but log a warning?
+					// For now, enforce length for simplicity unless it's handled manually later.
+					return fmt.Errorf("validation error in struct '%s': field '%s' of type '%s' requires a 'Length' specification (either a positive integer or a valid Go expression)", structName, field.Name, field.Type)
+				}
+				// Try parsing as integer first
+				lengthInt, errConv := strconv.Atoi(field.Length)
+				if errConv == nil {
+					// It's an integer
+					if lengthInt <= 0 {
+						return fmt.Errorf("validation error in struct '%s': field '%s' has invalid non-positive integer 'Length: %s'", structName, field.Name, field.Length)
 					}
+					// Positive integer length is valid
+				} else {
+					// Not an integer, assume it's an expression. Perform basic checks.
+					if !isValidLengthExpression(field.Length) {
+						return fmt.Errorf("validation error in struct '%s': field '%s' has invalid 'Length: %s'. Must be a positive integer or a valid Go expression (cannot be empty or '...')", structName, field.Name, field.Length)
+					}
+					// Passes basic expression checks (e.g., not "...")
+					log.Printf("Info: Field '%s.%s' uses expression length '%s'. Ensure the expression is valid Go code.", structName, field.Name, field.Length)
 				}
 
-				// Check field order matches stub
-				if len(expected.FieldOrder) == len(structDef.Fields) {
-					for i, field := range structDef.Fields {
-						if i < len(expected.FieldOrder) && field.Name != expected.FieldOrder[i] {
-							log.Printf("Warning: Field order mismatch in struct '%s' - expected '%s' at position %d but found '%s'",
-								structName, expected.FieldOrder[i], i, field.Name)
-						}
+			case "uint8", "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64", "float32", "float64":
+				// Fixed-size types should not have a Length specified
+				if field.Length != "" {
+					// Log a warning, but don't necessarily fail generation
+					log.Printf("Warning: struct '%s': field '%s' of fixed-size type '%s' has an unnecessary 'Length: %s' specification. It will be ignored.", structName, field.Name, field.Type, field.Length)
+				}
+			default:
+				// If it's a custom struct type, Length might not apply directly.
+				// If Length is present, maybe warn?
+				if field.Length != "" {
+					log.Printf("Warning: struct '%s': field '%s' of type '%s' has a 'Length: %s' specification. Its usage depends on custom logic or nested struct handling.", structName, field.Name, field.Type, field.Length)
+				}
+			}
+
+			// Validate Condition field if present
+			if field.IsConditional() {
+				trimmedCondition := strings.TrimSpace(field.Condition)
+				if trimmedCondition == "" {
+					return fmt.Errorf("validation error in struct '%s': conditional field '%s' has an empty 'Condition'", structName, field.Name)
+				}
+				// Basic check: ensure condition doesn't look obviously wrong (e.g., just operators)
+				// A more robust check could involve parsing, but might be overkill.
+				log.Printf("Info: Field '%s.%s' uses condition '%s'. Ensure the expression is valid Go code referencing struct fields with 's.'.", structName, field.Name, field.Condition)
+
+			}
+		}
+		// Validate against stub expectations if available (Keep this existing logic)
+		if expected, exists := expectedStructs[structName]; exists {
+			// Check for extra fields in YAML that aren't in stub
+			yamlFields := make(map[string]bool)
+			for _, field := range structDef.Fields {
+				yamlFields[field.Name] = true
+				if _, existsInStub := expected.FieldTypes[field.Name]; !existsInStub {
+					log.Printf("Warning: Field '%s' in YAML struct '%s' is not present in stub file '%s'", field.Name, structName, targetStubName)
+				}
+			}
+			// Check for missing fields in YAML that are in stub
+			for _, expectedFieldName := range expected.FieldOrder {
+				if _, existsInYaml := yamlFields[expectedFieldName]; !existsInYaml {
+					log.Printf("Warning: Field '%s' from stub file '%s' is missing in YAML struct '%s'", expectedFieldName, targetStubName, structName)
+				}
+			}
+
+			// Check field order matches stub
+			if len(expected.FieldOrder) == len(structDef.Fields) {
+				for i, field := range structDef.Fields {
+					if i < len(expected.FieldOrder) && field.Name != expected.FieldOrder[i] {
+						log.Printf("Warning: Field order mismatch in struct '%s' at index %d - expected '%s' (from stub) but found '%s' (in YAML)",
+							structName, i, expected.FieldOrder[i], field.Name)
 					}
 				}
+			} else if len(expected.FieldOrder) > 0 { // Only warn if stub had fields
+				log.Printf("Warning: Field count mismatch in struct '%s'. Stub file '%s' has %d fields, YAML has %d fields.",
+					structName, targetStubName, len(expected.FieldOrder), len(structDef.Fields))
 			}
 		}
 	}
+	log.Println("YAML validation complete.")
+	// --- END YAML VALIDATION ---
 
 	// Ensure output directory exists
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to ensure output directory %s exists: %w", outputDir, err)
 	}
 
-	// 3. Parse the main template once, registering custom functions
+	// 3. Parse the main template once... (rest of the function remains the same)
 	tmpl := template.New("struct").Funcs(template.FuncMap{
 		"atoi": atoi,
 		"isExpressionLength": func(f application_structs.Field) bool {
-			return f.IsExpressionLength()
+			// Keep the original logic, validation happens before this
+			_, err := strconv.Atoi(f.Length)
+			return err != nil && f.Length != "" // It's not an int and not empty
 		},
-		// Add a function to check if a field is conditional
 		"isConditional": func(f application_structs.Field) bool {
 			return f.IsConditional()
 		},
-		// Function to generate the Go condition check
 		"generateConditionCheck": func(condition string) string {
-			// This is a simple implementation that assumes the condition string
-			// is valid Go syntax using 's.' prefix for fields
+			// Assume validation ensured the condition is reasonable
 			return condition
 		},
 	})
@@ -237,6 +311,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 
 	// 4. For each struct defined in the YAML, execute the template
 	for structName, structDef := range fileFormat.Structs {
+		// ... (rest of the loop generating code remains the same) ...
 		log.Printf("Generating code for struct: %s", structName)
 
 		// 4A. Determine required imports, build field map, AND check variable needs
@@ -263,41 +338,37 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 			case "string":
 				needsFmt = true
 				needsBVar = true
-				if field.Length != "" {
-					// Check if length is valid int
-					if _, errConv := strconv.Atoi(field.Length); errConv == nil && field.Length != "0" {
-						// Fixed length string read uses err
-						fieldUsesErrRead = true
-					}
-					// If length is expression or 0, the template returns early - no err use here
+				// Validation ensures Length exists and is valid here
+				// Check if length is > 0 int or expression for err usage
+				_, errConv := strconv.Atoi(field.Length)
+				if errConv == nil { // It's an int (already validated > 0)
+					fieldUsesErrRead = true // io.ReadFull uses err
+				} else { // It's an expression
+					fieldUsesErrRead = true // Assume expression read uses err
 				}
-				// If no length, template returns early - no err use here
+				fieldUsesErrWrite = true // Write always uses err for string
+
 			case "[]byte":
 				needsFmt = true
+				// Validation ensures Length exists and is valid here
 				fieldUsesErrWrite = true // Write always uses err for []byte
-				if field.Length != "" {
-					// Both fixed and expression lengths use err in Read
-					fieldUsesErrRead = true
-					// Check if length is valid int > 0 for ReadFull
-					if _, errConv := strconv.Atoi(field.Length); errConv == nil && field.Length != "0" {
-						fieldUsesErrRead = true // io.ReadFull uses err
-					}
+				// Check if length is > 0 int or expression for err usage
+				_, errConv := strconv.Atoi(field.Length)
+				if errConv == nil { // It's an int (already validated > 0)
+					fieldUsesErrRead = true // io.ReadFull uses err
+				} else { // It's an expression
+					fieldUsesErrRead = true // Assume expression read uses err
 				}
 
-				// Keep the existing logic for logging warnings/info based on Length for the Read method perspective
-				if field.Length != "" {
-					// Check if length is valid int
-					if field.Length == "" {
-						// Log warning about missing length
-						log.Printf("Warning: []byte field '%s' in struct '%s' has no length specified. Read/Write logic might be incomplete.", field.Name, structName)
-					} else if _, errConv := strconv.Atoi(field.Length); errConv != nil {
-						// Log info about expression length
-						log.Printf("Info: []byte field '%s' uses expression length '%s'. Generated code assumes dependencies are met.", field.Name, field.Length)
-					}
-				}
 			default:
-				// Unsupported type path returns early - no err use here
+				// For custom struct types, we might need 'fmt' for errors if Read/Write are called
+				// Let's assume fmt is needed if there's any field.
 				needsFmt = true
+				// We can't easily determine err usage for nested structs automatically here.
+				// Assume they might use err for now.
+				// TODO: Refine this if nested struct generation is added.
+				log.Printf("Info: Field '%s.%s' has potentially unsupported type '%s' for automatic Read/Write generation.", structName, field.Name, field.Type)
+
 			}
 
 			// Aggregate flags: if *any* field uses err in Read, the function needs the var
@@ -314,7 +385,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 		if needsBinary {
 			requiredImports["encoding/binary"] = true
 		}
-		// Always include fmt if there are fields, for potential error messages
+		// Always include fmt if there are fields or potential errors
 		if needsFmt || len(structDef.Fields) > 0 {
 			requiredImports["fmt"] = true
 		}
@@ -349,34 +420,34 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 		log.Printf("Successfully executed template for %s.", structName)
 
 		// 5. Write the generated code to a file
-		// Use Capitalized struct name for the Go file name convention
-		goFileName := strings.Title(structName) + ".go"
+		goFileName := strings.Title(structName) + ".go" // Use Title case for filename
 		outputPath := filepath.Join(outputDir, goFileName)
 
-		// Use ioutil.WriteFile (or os.WriteFile in Go 1.16+)
-		err = ioutil.WriteFile(outputPath, output.Bytes(), 0644)
+		formattedOutput, errFmt := format.Source(output.Bytes())
+		if errFmt != nil {
+			log.Printf("Warning: Failed to format generated code for %s: %v. Writing unformatted code.", structName, errFmt)
+			// Log the unformatted code if formatting fails, might help debug template issues
+			// log.Printf("Unformatted code for %s:\n%s", structName, output.String())
+			formattedOutput = output.Bytes() // Fallback
+		}
+
+		err = ioutil.WriteFile(outputPath, formattedOutput, 0644)
 		if err != nil {
 			return fmt.Errorf("error writing generated code to file %s: %w", outputPath, err)
 		}
 		log.Printf("Generated %s", outputPath)
 
-	}
+	} // End loop through structs
 
 	// --- START STUB REMOVAL STEP ---
-	// Check if the stub file exists before trying to remove it
+	// ... (Keep stub removal logic as is) ...
 	if _, err := os.Stat(stubFilePath); err == nil {
-		// Stub file exists, attempt to remove it
 		log.Printf("Removing stub file: %s", stubFilePath)
 		if err := os.Remove(stubFilePath); err != nil {
-			// Log a warning if removal fails, but don't fail the whole process
 			log.Printf("Warning: Failed to remove stub file %s: %v", stubFilePath, err)
 		}
 	} else if !os.IsNotExist(err) {
-		// Log warning if there was an error checking for the stub file (other than not existing)
 		log.Printf("Warning: Error checking for stub file %s: %v", stubFilePath, err)
-	} else {
-		// Stub file doesn't exist, which is fine after the first successful run
-		// log.Printf("Stub file %s does not exist, skipping removal.", stubFilePath) // Optional log message
 	}
 
 	// 6. Log success and return nil only after the loop finishes

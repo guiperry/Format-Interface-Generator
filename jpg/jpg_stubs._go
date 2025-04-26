@@ -1,0 +1,90 @@
+// jpg_stubs.go - Stub file
+// IMPORTANT: This file contains stub definitions for compile-time checks.
+//            It should NOT be removed by the generator.
+package jpg
+
+import "io"
+
+
+// --- Stub for SOI ---
+type SOI struct {
+    
+    Marker uint16 // Start of Image marker (FFD8).
+    
+}
+
+// Dummy Read method
+func (s *SOI) Read(r io.Reader) error {
+	return nil
+}
+
+// Dummy Write method
+func (s *SOI) Write(w io.Writer) error {
+	return nil
+}
+
+
+
+// --- Stub for GenericSegment ---
+type GenericSegment struct {
+    
+    Marker uint16 // Segment marker code.
+    
+    Length uint16 // Length of the segment payload (including the length field itself, minus marker).
+    
+    Payload []byte // Segment data (structure varies greatly depending on Marker).
+    
+}
+
+// Dummy Read method
+func (s *GenericSegment) Read(r io.Reader) error {
+	return nil
+}
+
+// Dummy Write method
+func (s *GenericSegment) Write(w io.Writer) error {
+	return nil
+}
+
+
+
+// --- Stub for SOSPayload ---
+type SOSPayload struct {
+    
+    ScanHeader []byte // Scan component specification.
+    
+    CompressedImageData []byte // Entropy-coded segment data (Huffman or Arithmetic).
+    
+}
+
+// Dummy Read method
+func (s *SOSPayload) Read(r io.Reader) error {
+	return nil
+}
+
+// Dummy Write method
+func (s *SOSPayload) Write(w io.Writer) error {
+	return nil
+}
+
+
+
+// --- Stub for EOI ---
+type EOI struct {
+    
+    Marker uint16 // End of Image marker (FFD9).
+    
+}
+
+// Dummy Read method
+func (s *EOI) Read(r io.Reader) error {
+	return nil
+}
+
+// Dummy Write method
+func (s *EOI) Write(w io.Writer) error {
+	return nil
+}
+
+
+

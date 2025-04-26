@@ -1,0 +1,13 @@
+
+
+[
+  {
+    "name": "BMP",
+    "yamlFile": "bmp.yml",
+    "outputDir": "bmp",
+    "packageName": "bmp",
+    "resetStubSource": "bmp_stubs_source.go",
+    "targetStub": "bmp_stubs.go",
+    "testFile": "bmp_test.go"
+  }
+]

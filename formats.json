@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Jpg",
+    "yamlFile": "jpg.yml",
+    "outputDir": "jpg",
+    "packageName": "jpg",
+    "targetStub": "jpg/jpg_stubs.go",
+    "testFile": "jpg/jpg_test.go"
+  }
+]
