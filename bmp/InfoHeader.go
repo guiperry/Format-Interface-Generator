@@ -43,90 +43,112 @@ func (s *InfoHeader) Read(r io.Reader) error {
     
 	// Read HeaderSize (uint32)
 	
+	
 	err = binary.Read(r, binary.LittleEndian, &s.HeaderSize) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading HeaderSize (uint32): %w", err)
 	}
 	
+	
     
 	// Read Width (uint32)
+	
 	
 	err = binary.Read(r, binary.LittleEndian, &s.Width) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading Width (uint32): %w", err)
 	}
 	
+	
     
 	// Read Height (uint32)
+	
 	
 	err = binary.Read(r, binary.LittleEndian, &s.Height) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading Height (uint32): %w", err)
 	}
 	
+	
     
 	// Read Planes (uint16)
+	
 	
 	err = binary.Read(r, binary.LittleEndian, &s.Planes) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading Planes (uint16): %w", err)
 	}
 	
+	
     
 	// Read BitsPerPixel (uint16)
+	
 	
 	err = binary.Read(r, binary.LittleEndian, &s.BitsPerPixel) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading BitsPerPixel (uint16): %w", err)
 	}
 	
+	
     
 	// Read Compression (uint32)
+	
 	
 	err = binary.Read(r, binary.LittleEndian, &s.Compression) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading Compression (uint32): %w", err)
 	}
 	
+	
     
 	// Read ImageSize (uint32)
+	
 	
 	err = binary.Read(r, binary.LittleEndian, &s.ImageSize) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading ImageSize (uint32): %w", err)
 	}
 	
+	
     
 	// Read XPixelsPerMeter (int32)
+	
 	
 	err = binary.Read(r, binary.LittleEndian, &s.XPixelsPerMeter) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading XPixelsPerMeter (int32): %w", err)
 	}
 	
+	
     
 	// Read YPixelsPerMeter (int32)
+	
 	
 	err = binary.Read(r, binary.LittleEndian, &s.YPixelsPerMeter) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading YPixelsPerMeter (int32): %w", err)
 	}
 	
+	
     
 	// Read ColorsUsed (uint32)
+	
 	
 	err = binary.Read(r, binary.LittleEndian, &s.ColorsUsed) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading ColorsUsed (uint32): %w", err)
 	}
 	
+	
     
 	// Read ImportantColors (uint32)
+	
 	
 	err = binary.Read(r, binary.LittleEndian, &s.ImportantColors) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading ImportantColors (uint32): %w", err)
 	}
+	
 	
     
 
@@ -145,90 +167,112 @@ func (s *InfoHeader) Write(w io.Writer) error {
     
 	// Write HeaderSize (uint32)
 	
+	
 	err = binary.Write(w, binary.LittleEndian, s.HeaderSize) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing HeaderSize (uint32): %w", err)
 	}
 	
+	
     
 	// Write Width (uint32)
+	
 	
 	err = binary.Write(w, binary.LittleEndian, s.Width) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing Width (uint32): %w", err)
 	}
 	
+	
     
 	// Write Height (uint32)
+	
 	
 	err = binary.Write(w, binary.LittleEndian, s.Height) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing Height (uint32): %w", err)
 	}
 	
+	
     
 	// Write Planes (uint16)
+	
 	
 	err = binary.Write(w, binary.LittleEndian, s.Planes) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing Planes (uint16): %w", err)
 	}
 	
+	
     
 	// Write BitsPerPixel (uint16)
+	
 	
 	err = binary.Write(w, binary.LittleEndian, s.BitsPerPixel) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing BitsPerPixel (uint16): %w", err)
 	}
 	
+	
     
 	// Write Compression (uint32)
+	
 	
 	err = binary.Write(w, binary.LittleEndian, s.Compression) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing Compression (uint32): %w", err)
 	}
 	
+	
     
 	// Write ImageSize (uint32)
+	
 	
 	err = binary.Write(w, binary.LittleEndian, s.ImageSize) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing ImageSize (uint32): %w", err)
 	}
 	
+	
     
 	// Write XPixelsPerMeter (int32)
+	
 	
 	err = binary.Write(w, binary.LittleEndian, s.XPixelsPerMeter) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing XPixelsPerMeter (int32): %w", err)
 	}
 	
+	
     
 	// Write YPixelsPerMeter (int32)
+	
 	
 	err = binary.Write(w, binary.LittleEndian, s.YPixelsPerMeter) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing YPixelsPerMeter (int32): %w", err)
 	}
 	
+	
     
 	// Write ColorsUsed (uint32)
+	
 	
 	err = binary.Write(w, binary.LittleEndian, s.ColorsUsed) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing ColorsUsed (uint32): %w", err)
 	}
 	
+	
     
 	// Write ImportantColors (uint32)
+	
 	
 	err = binary.Write(w, binary.LittleEndian, s.ImportantColors) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing ImportantColors (uint32): %w", err)
 	}
+	
 	
     
 

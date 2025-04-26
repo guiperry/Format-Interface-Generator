@@ -4,12 +4,14 @@ package application_structs
 import (
 	"fmt"
 	"strconv"
+	// Import strings for potential condition handling
 )
 
 type FileFormat struct {
-	Name        string            `yaml:"name"`
-	Description string            `yaml:"description"`
-	Structs     map[string]Struct `yaml:"structs"`
+	Name             string            `yaml:"name"`
+	Description      string            `yaml:"description"`
+	VersionFieldPath string            `yaml:"version_field,omitempty"` // e.g., "Header.Version"
+	Structs          map[string]Struct `yaml:"structs"`
 }
 
 type Struct struct {
@@ -22,9 +24,8 @@ type Field struct {
 	Description string `yaml:"description"`
 	// Length can be a number (as string) or an expression (e.g., "Width*Height*3")
 	// It's used for fixed-size strings, byte slices, or dynamic lengths
-	Length string `yaml:"length,omitempty"`
-	
-
+	Length    string `yaml:"length,omitempty"`
+	Condition string `yaml:"condition,omitempty"` // Condition for reading/writing
 }
 
 func (f *Field) GetLength() (int, error) {
@@ -50,6 +51,12 @@ func (f *Field) IsExpressionLength() bool {
 	_, err := strconv.Atoi(f.Length)
 	return err != nil
 }
+
+// IsConditional returns true if the field has a condition
+func (f *Field) IsConditional() bool {
+	return f.Condition != ""
+}
+
 // Validate checks if required fields are present and valid
 func (f *Field) Validate() error {
 	if f.Name == "" {
@@ -58,13 +65,13 @@ func (f *Field) Validate() error {
 	if f.Type == "" {
 		return fmt.Errorf("field %s: type cannot be empty", f.Name)
 	}
-	
+
 	// For []byte and string types, Length is required
 	if f.Type == "[]byte" || f.Type == "string" {
 		if f.Length == "" {
 			return fmt.Errorf("field %s (%s): length must be specified", f.Name, f.Type)
 		}
 	}
-	
+
 	return nil
 }

@@ -22,10 +22,12 @@ func (s *ImageData) Read(r io.Reader) error {
     
 	// Read PixelData ([]byte)
 	
+	
 		
 	// This field cannot be read automatically.
 	return fmt.Errorf("cannot automatically read []byte field PixelData without a defined length") // Returns early
 		
+	
 	
     
 
@@ -41,10 +43,12 @@ func (s *ImageData) Write(w io.Writer) error {
     
 	// Write PixelData ([]byte)
 	
+	
 	_, err = w.Write(s.PixelData) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing PixelData ([]byte): %w", err)
 	}
+	
 	
     
 

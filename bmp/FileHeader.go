@@ -31,6 +31,7 @@ func (s *FileHeader) Read(r io.Reader) error {
     
 	// Read Signature (string)
 	
+	
 		
 			
 				
@@ -45,37 +46,46 @@ func (s *FileHeader) Read(r io.Reader) error {
 			
 		
 	
+	
     
 	// Read FileSize (uint32)
+	
 	
 	err = binary.Read(r, binary.LittleEndian, &s.FileSize) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading FileSize (uint32): %w", err)
 	}
 	
+	
     
 	// Read Reserved1 (uint16)
+	
 	
 	err = binary.Read(r, binary.LittleEndian, &s.Reserved1) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading Reserved1 (uint16): %w", err)
 	}
 	
+	
     
 	// Read Reserved2 (uint16)
+	
 	
 	err = binary.Read(r, binary.LittleEndian, &s.Reserved2) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading Reserved2 (uint16): %w", err)
 	}
 	
+	
     
 	// Read DataOffset (uint32)
+	
 	
 	err = binary.Read(r, binary.LittleEndian, &s.DataOffset) // Uses err
 	if err != nil {
 		return fmt.Errorf("reading DataOffset (uint32): %w", err)
 	}
+	
 	
     
 
@@ -94,43 +104,53 @@ func (s *FileHeader) Write(w io.Writer) error {
     
 	// Write Signature (string)
 	
+	
 	_, err = w.Write([]byte(s.Signature)) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing Signature (string): %w", err)
 	}
 	// TODO: Add padding if fixed length string is required?
 	
+	
     
 	// Write FileSize (uint32)
+	
 	
 	err = binary.Write(w, binary.LittleEndian, s.FileSize) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing FileSize (uint32): %w", err)
 	}
 	
+	
     
 	// Write Reserved1 (uint16)
+	
 	
 	err = binary.Write(w, binary.LittleEndian, s.Reserved1) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing Reserved1 (uint16): %w", err)
 	}
 	
+	
     
 	// Write Reserved2 (uint16)
+	
 	
 	err = binary.Write(w, binary.LittleEndian, s.Reserved2) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing Reserved2 (uint16): %w", err)
 	}
 	
+	
     
 	// Write DataOffset (uint32)
+	
 	
 	err = binary.Write(w, binary.LittleEndian, s.DataOffset) // Uses err
 	if err != nil {
 		return fmt.Errorf("writing DataOffset (uint32): %w", err)
 	}
+	
 	
     
 

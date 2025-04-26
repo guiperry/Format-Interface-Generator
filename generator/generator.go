@@ -24,10 +24,11 @@ import (
 // TemplateData holds all necessary info for template execution
 type TemplateData struct {
 	PackageName      string
-	Imports         []string
+	Imports          []string
 	StructName       string
 	Fields           []application_structs.Field
 	FieldMap         map[string]string
+	VersionFieldPath string // Path to the version field
 	// Flags to control variable declarations in the template
 	NeedsErrVarRead  bool // True if any read operation generates code that uses 'err'
 	NeedsErrVarWrite bool // True if any write operation generates code that uses 'err'
@@ -217,6 +218,16 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 		"isExpressionLength": func(f application_structs.Field) bool {
 			return f.IsExpressionLength()
 		},
+		// Add a function to check if a field is conditional
+		"isConditional": func(f application_structs.Field) bool {
+			return f.IsConditional()
+		},
+		// Function to generate the Go condition check
+		"generateConditionCheck": func(condition string) string {
+			// This is a simple implementation that assumes the condition string
+			// is valid Go syntax using 's.' prefix for fields
+			return condition
+		},
 	})
 	tmpl, err = tmpl.Parse(StructTemplate)
 	if err != nil {
@@ -317,14 +328,15 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 
 		// 4B. Prepare data for the template, including the new flags
 		templateData := TemplateData{
-			PackageName: packageName,
-			Imports:     importsList,
-			StructName:  structName,
-			Fields:      structDef.Fields,
-			FieldMap:    fieldMap,
-			NeedsErrVarRead:  needsErrVarRead,  // Pass specific flags
+			PackageName:      packageName,
+			Imports:          importsList,
+			StructName:       structName,
+			Fields:           structDef.Fields,
+			FieldMap:         fieldMap,
+			VersionFieldPath: fileFormat.VersionFieldPath, // Pass the version field path
+			NeedsErrVarRead:  needsErrVarRead,             // Pass specific flags
 			NeedsErrVarWrite: needsErrVarWrite,
-			NeedsBVar:   needsBVar,
+			NeedsBVar:        needsBVar,
 		}
 
 		// 4C. Execute the template
@@ -347,7 +359,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 			return fmt.Errorf("error writing generated code to file %s: %w", outputPath, err)
 		}
 		log.Printf("Generated %s", outputPath)
-		
+
 	}
 
 	// --- START STUB REMOVAL STEP ---
@@ -366,11 +378,6 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 		// Stub file doesn't exist, which is fine after the first successful run
 		// log.Printf("Stub file %s does not exist, skipping removal.", stubFilePath) // Optional log message
 	}
-
-	// 6. Log success and return nil only after the loop finishes
-	log.Println("Code generation completed successfully.")
-	return nil
-	// --- END STUB REMOVAL STEP ---
 
 	// 6. Log success and return nil only after the loop finishes
 	log.Println("Code generation completed successfully.")

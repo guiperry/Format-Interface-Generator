@@ -23,6 +23,90 @@ func (s *{{.StructName}}) Read(r io.Reader) error {
 
     {{range $index, $field := .Fields}}
 	// Read {{$field.Name}} ({{$field.Type}})
+	{{if isConditional $field}}
+	// Conditional field: {{$field.Name}}
+	if {{generateConditionCheck $field.Condition}} {
+		{{if eq $field.Type "string"}}
+			{{if $field.Length}}
+				{{if isExpressionLength $field}}
+		// Dynamic length string field: {{$field.Name}}
+		size := int({{$field.Length}}) // Calculate length from expression
+		b = make([]byte, size)
+		_, err = io.ReadFull(r, b) // Uses err
+		if err != nil {
+			return fmt.Errorf("reading conditional field {{$field.Name}} (string[dynamic length {{$field.Length}}]): %w", err)
+		}
+		s.{{$field.Name}} = string(b)
+				{{else}}
+					{{$length := $field.Length | atoi}}
+					{{if gt $length 0}}
+		b = make([]byte, {{$length}})
+		_, err = io.ReadFull(r, b) // Uses err
+		if err != nil {
+			return fmt.Errorf("reading conditional field {{$field.Name}} (string[{{$length}}]): %w", err)
+		}
+		s.{{$field.Name}} = string(b)
+					{{else}}
+		return fmt.Errorf("invalid length {{$length}} for conditional string field {{$field.Name}}") // Returns early
+					{{end}}
+				{{end}}
+			{{else}}
+		return fmt.Errorf("cannot automatically read conditional string field {{$field.Name}} without a defined length") // Returns early
+			{{end}}
+		{{else if eq $field.Type "uint8"}}
+		var {{$field.Name}}_uint8 uint8
+		err = binary.Read(r, binary.LittleEndian, &{{$field.Name}}_uint8) // Uses err
+		if err != nil {
+			return fmt.Errorf("reading conditional field {{$field.Name}} (uint8): %w", err)
+		}
+		s.{{$field.Name}} = {{$field.Name}}_uint8
+		{{else if eq $field.Type "uint16"}}
+		err = binary.Read(r, binary.LittleEndian, &s.{{$field.Name}}) // Uses err
+		if err != nil {
+			return fmt.Errorf("reading conditional field {{$field.Name}} (uint16): %w", err)
+		}
+		{{else if eq $field.Type "uint32"}}
+		err = binary.Read(r, binary.LittleEndian, &s.{{$field.Name}}) // Uses err
+		if err != nil {
+			return fmt.Errorf("reading conditional field {{$field.Name}} (uint32): %w", err)
+		}
+		{{else if eq $field.Type "int32"}}
+		err = binary.Read(r, binary.LittleEndian, &s.{{$field.Name}}) // Uses err
+		if err != nil {
+			return fmt.Errorf("reading conditional field {{$field.Name}} (int32): %w", err)
+		}
+		{{else if eq $field.Type "[]byte"}}
+			{{if $field.Length}}
+				{{if isExpressionLength $field}}
+		// Dynamic length []byte field: {{$field.Name}}
+		size := int({{$field.Length}}) // Calculate length from expression
+		s.{{$field.Name}} = make([]byte, size)
+		_, err = io.ReadFull(r, s.{{$field.Name}}) // Uses err
+		if err != nil {
+			return fmt.Errorf("reading conditional field {{$field.Name}} ([]byte[dynamic length {{$field.Length}}]): %w", err)
+		}
+				{{else}}
+					{{$length := $field.Length | atoi}}
+					{{if gt $length 0}}
+		s.{{$field.Name}} = make([]byte, {{$length}})
+		_, err = io.ReadFull(r, s.{{$field.Name}}) // Uses err
+		if err != nil {
+			return fmt.Errorf("reading conditional field {{$field.Name}} ([]byte[{{$length}}]): %w", err)
+		}
+					{{else}}
+		return fmt.Errorf("invalid length {{$length}} for conditional []byte field {{$field.Name}}") // Returns early
+					{{end}}
+				{{end}}
+			{{else}}
+		// This field cannot be read automatically.
+		return fmt.Errorf("cannot automatically read conditional []byte field {{$field.Name}} without a defined length") // Returns early
+			{{end}}
+		{{else}}
+		// Unsupported type: {{$field.Type}} for conditional field {{$field.Name}}
+		return fmt.Errorf("unsupported type '%s' for conditional field {{$field.Name}} in Read method", "{{$field.Type}}") // Returns early
+		{{end}}
+	}
+	{{else}}
 	{{if eq $field.Type "string"}}
 		{{if $field.Length}}
 			{{if isExpressionLength $field}}
@@ -102,6 +186,7 @@ func (s *{{.StructName}}) Read(r io.Reader) error {
 	// Unsupported type: {{$field.Type}} for field {{$field.Name}}
 	return fmt.Errorf("unsupported type '%s' for field {{$field.Name}} in Read method", "{{$field.Type}}") // Returns early
 	{{end}}
+	{{end}}
     {{end}}
 
 	{{/* Final return nil logic:
@@ -125,41 +210,81 @@ func (s *{{.StructName}}) Read(r io.Reader) error {
 func (s *{{.StructName}}) Write(w io.Writer) error {
 	{{if .NeedsErrVarWrite}}var err error{{end}} // Declare err only if needed for Write
 
-    {{range .Fields}}
-	// Write {{.Name}} ({{.Type}})
-	{{if eq .Type "string"}}
-	_, err = w.Write([]byte(s.{{.Name}})) // Uses err
-	if err != nil {
-		return fmt.Errorf("writing {{.Name}} (string): %w", err)
-	}
-	// TODO: Add padding if fixed length string is required?
-	{{else if eq .Type "uint8"}}
-	err = binary.Write(w, binary.LittleEndian, s.{{.Name}}) // Uses err
-	if err != nil {
-		return fmt.Errorf("writing {{.Name}} (uint8): %w", err)
-	}
-	{{else if eq .Type "uint16"}}
-	err = binary.Write(w, binary.LittleEndian, s.{{.Name}}) // Uses err
-	if err != nil {
-		return fmt.Errorf("writing {{.Name}} (uint16): %w", err)
-	}
-	{{else if eq .Type "uint32"}}
-	err = binary.Write(w, binary.LittleEndian, s.{{.Name}}) // Uses err
-	if err != nil {
-		return fmt.Errorf("writing {{.Name}} (uint32): %w", err)
-	}
-	{{else if eq .Type "int32"}}
-	err = binary.Write(w, binary.LittleEndian, s.{{.Name}}) // Uses err
-	if err != nil {
-		return fmt.Errorf("writing {{.Name}} (int32): %w", err)
-	}
-	{{else if eq .Type "[]byte"}}
-	_, err = w.Write(s.{{.Name}}) // Uses err
-	if err != nil {
-		return fmt.Errorf("writing {{.Name}} ([]byte): %w", err)
+    {{range $index, $field := .Fields}}
+	// Write {{$field.Name}} ({{$field.Type}})
+	{{if isConditional $field}}
+	// Conditional field: {{$field.Name}}
+	if {{generateConditionCheck $field.Condition}} {
+		{{if eq $field.Type "string"}}
+		_, err = w.Write([]byte(s.{{$field.Name}})) // Uses err
+		if err != nil {
+			return fmt.Errorf("writing conditional field {{$field.Name}} (string): %w", err)
+		}
+		// TODO: Add padding if fixed length string is required?
+		{{else if eq $field.Type "uint8"}}
+		err = binary.Write(w, binary.LittleEndian, s.{{$field.Name}}) // Uses err
+		if err != nil {
+			return fmt.Errorf("writing conditional field {{$field.Name}} (uint8): %w", err)
+		}
+		{{else if eq $field.Type "uint16"}}
+		err = binary.Write(w, binary.LittleEndian, s.{{$field.Name}}) // Uses err
+		if err != nil {
+			return fmt.Errorf("writing conditional field {{$field.Name}} (uint16): %w", err)
+		}
+		{{else if eq $field.Type "uint32"}}
+		err = binary.Write(w, binary.LittleEndian, s.{{$field.Name}}) // Uses err
+		if err != nil {
+			return fmt.Errorf("writing conditional field {{$field.Name}} (uint32): %w", err)
+		}
+		{{else if eq $field.Type "int32"}}
+		err = binary.Write(w, binary.LittleEndian, s.{{$field.Name}}) // Uses err
+		if err != nil {
+			return fmt.Errorf("writing conditional field {{$field.Name}} (int32): %w", err)
+		}
+		{{else if eq $field.Type "[]byte"}}
+		_, err = w.Write(s.{{$field.Name}}) // Uses err
+		if err != nil {
+			return fmt.Errorf("writing conditional field {{$field.Name}} ([]byte): %w", err)
+		}
+		{{else}}
+		return fmt.Errorf("unsupported type '%s' for conditional field {{$field.Name}} in Write method", "{{$field.Type}}") // Returns early
+		{{end}}
 	}
 	{{else}}
-	return fmt.Errorf("unsupported type '%s' for field {{.Name}} in Write method", "{{.Type}}") // Returns early
+	{{if eq $field.Type "string"}}
+	_, err = w.Write([]byte(s.{{$field.Name}})) // Uses err
+	if err != nil {
+		return fmt.Errorf("writing {{$field.Name}} (string): %w", err)
+	}
+	// TODO: Add padding if fixed length string is required?
+	{{else if eq $field.Type "uint8"}}
+	err = binary.Write(w, binary.LittleEndian, s.{{$field.Name}}) // Uses err
+	if err != nil {
+		return fmt.Errorf("writing {{$field.Name}} (uint8): %w", err)
+	}
+	{{else if eq $field.Type "uint16"}}
+	err = binary.Write(w, binary.LittleEndian, s.{{$field.Name}}) // Uses err
+	if err != nil {
+		return fmt.Errorf("writing {{$field.Name}} (uint16): %w", err)
+	}
+	{{else if eq $field.Type "uint32"}}
+	err = binary.Write(w, binary.LittleEndian, s.{{$field.Name}}) // Uses err
+	if err != nil {
+		return fmt.Errorf("writing {{$field.Name}} (uint32): %w", err)
+	}
+	{{else if eq $field.Type "int32"}}
+	err = binary.Write(w, binary.LittleEndian, s.{{$field.Name}}) // Uses err
+	if err != nil {
+		return fmt.Errorf("writing {{$field.Name}} (int32): %w", err)
+	}
+	{{else if eq $field.Type "[]byte"}}
+	_, err = w.Write(s.{{$field.Name}}) // Uses err
+	if err != nil {
+		return fmt.Errorf("writing {{$field.Name}} ([]byte): %w", err)
+	}
+	{{else}}
+	return fmt.Errorf("unsupported type '%s' for field {{$field.Name}} in Write method", "{{$field.Type}}") // Returns early
+	{{end}}
 	{{end}}
     {{end}}
 
