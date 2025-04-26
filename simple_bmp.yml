@@ -1,0 +1,30 @@
+name: SimpleBMP
+description: A simplified BMP file format.
+structs:
+  Header:
+    fields:
+      - name: Signature
+        type: string
+        length: 2
+        description: "BMP Signature (BM)"
+      - name: FileSize
+        type: uint32
+        description: Total file size
+      - name: Reserved
+        type: uint32
+        description: Reserved (0)
+      - name: DataOffset
+        type: uint32
+        description: Offset to image data
+  ImageData:
+    fields:
+      - name: Width
+        type: uint32
+        description: Image width
+      - name: Height
+        type: uint32
+        description: Image height
+      - name: PixelData
+        type: "[]byte"
+        stringLength: "Width * Height * 3"
+        description: RGB pixel data
