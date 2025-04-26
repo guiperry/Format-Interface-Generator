@@ -150,13 +150,13 @@ func TestGeneratedCode(t *testing.T) { // Changed to a test function
 			}
 		}()
 
-		if readErr = readHeader.Read(readFile); readErr != nil {
+		if readErr = readHeader.Read(readFile, nil); readErr != nil {
 			readErr = fmt.Errorf("error reading header: %w", readErr)
 			return
 		}
 		log.Println("-> Header read.")
 
-		if readErr = readInfoHeader.Read(readFile); readErr != nil {
+		if readErr = readInfoHeader.Read(readFile, nil); readErr != nil {
 			readErr = fmt.Errorf("error reading info header: %w", readErr)
 			return
 		}
@@ -222,4 +222,3 @@ func TestGeneratedCode(t *testing.T) { // Changed to a test function
 	log.Println("Phase 3: Verification finished.")
 	log.Println("Generated code test completed.")
 }
-

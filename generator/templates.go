@@ -16,8 +16,9 @@ type {{.StructName}} struct {
     {{end}}
 }
 
-// Read populates the struct fields by reading from an io.Reader.
-func (s *{{.StructName}}) Read(r io.Reader) error {
+// Read populates the struct fields by reading from an io.Reader, using optional context.
+// The context can be used by dynamic length calculations.
+func (s *{{.StructName}}) Read(r io.Reader, ctx interface{}) error {
 	{{if .NeedsErrVarRead}}var err error{{end}} // Declare err only if needed for Read
 	{{if .NeedsBVar}}var b []byte{{end}}
 
@@ -29,12 +30,44 @@ func (s *{{.StructName}}) Read(r io.Reader) error {
 		{{if eq $field.Type "string"}}
 			{{if $field.Length}}
 				{{if isExpressionLength $field}}
-		// Dynamic length string field: {{$field.Name}}
-		size := int({{$field.Length}}) // Calculate length from expression
-		b = make([]byte, size)
-		_, err = io.ReadFull(r, b) // Uses err
+		// Dynamic length string field: {{$field.Name}} using expression: {{$field.Length}}
+		expressionStr := ` + "`{{$field.Length}}`" + ` // Use backticks for raw string literal
+		expression, errExpr := govaluate.NewEvaluableExpressionWithFunctions(expressionStr, GetExpressionFunctions())
+		if errExpr != nil {
+			return fmt.Errorf("parsing length expression for conditional field {{$field.Name}} ('%s'): %w", expressionStr, errExpr)
+		}
+		parameters := map[string]interface{}{
+			"s":   s,   // Pass the current struct instance
+			"ctx": ctx, // Pass the context
+		}
+		evalResult, errEval := expression.Evaluate(parameters)
+		if errEval != nil {
+			return fmt.Errorf("evaluating length expression for conditional field {{$field.Name}} ('%s'): %w", expressionStr, errEval)
+		}
+		// Convert result to int (handle potential float64 from evaluator)
+		var size int
+		switch v := evalResult.(type) {
+		case float64: size = int(v)
+		case float32: size = int(v)
+		case int: size = v
+		case int64: size = int(v)
+		case int32: size = int(v)
+		case uint: size = int(v)
+		case uint64: size = int(v)
+		case uint32: size = int(v)
+		case uint16: size = int(v)
+		case uint8: size = int(v)
+		default:
+			return fmt.Errorf("length expression for conditional field {{$field.Name}} ('%s') evaluated to non-numeric type %T", expressionStr, evalResult)
+		}
+		if size < 0 {
+			return fmt.Errorf("length expression for conditional field {{$field.Name}} ('%s') evaluated to negative size %d", expressionStr, size)
+		}
+		
+		b = make([]byte, size) // Uses b var
+		_, err = io.ReadFull(r, b) // Uses err var
 		if err != nil {
-			return fmt.Errorf("reading conditional field {{$field.Name}} (string[dynamic length {{$field.Length}}]): %w", err)
+			return fmt.Errorf("reading conditional field {{$field.Name}} (string[dynamic length %s]): %w", expressionStr, err)
 		}
 		s.{{$field.Name}} = string(b)
 				{{else}}
@@ -78,12 +111,44 @@ func (s *{{.StructName}}) Read(r io.Reader) error {
 		{{else if eq $field.Type "[]byte"}}
 			{{if $field.Length}}
 				{{if isExpressionLength $field}}
-		// Dynamic length []byte field: {{$field.Name}}
-		size := int({{$field.Length}}) // Calculate length from expression
+		// Dynamic length []byte field: {{$field.Name}} using expression: {{$field.Length}}
+		expressionStr := ` + "`{{$field.Length}}`" + ` // Use backticks for raw string literal
+		expression, errExpr := govaluate.NewEvaluableExpressionWithFunctions(expressionStr, GetExpressionFunctions())
+		if errExpr != nil {
+			return fmt.Errorf("parsing length expression for conditional field {{$field.Name}} ('%s'): %w", expressionStr, errExpr)
+		}
+		parameters := map[string]interface{}{
+			"s":   s,   // Pass the current struct instance
+			"ctx": ctx, // Pass the context
+		}
+		evalResult, errEval := expression.Evaluate(parameters)
+		if errEval != nil {
+			return fmt.Errorf("evaluating length expression for conditional field {{$field.Name}} ('%s'): %w", expressionStr, errEval)
+		}
+		// Convert result to int (handle potential float64 from evaluator)
+		var size int
+		switch v := evalResult.(type) {
+		case float64: size = int(v)
+		case float32: size = int(v)
+		case int: size = v
+		case int64: size = int(v)
+		case int32: size = int(v)
+		case uint: size = int(v)
+		case uint64: size = int(v)
+		case uint32: size = int(v)
+		case uint16: size = int(v)
+		case uint8: size = int(v)
+		default:
+			return fmt.Errorf("length expression for conditional field {{$field.Name}} ('%s') evaluated to non-numeric type %T", expressionStr, evalResult)
+		}
+		if size < 0 {
+			return fmt.Errorf("length expression for conditional field {{$field.Name}} ('%s') evaluated to negative size %d", expressionStr, size)
+		}
+		
 		s.{{$field.Name}} = make([]byte, size)
-		_, err = io.ReadFull(r, s.{{$field.Name}}) // Uses err
+		_, err = io.ReadFull(r, s.{{$field.Name}}) // Uses err var
 		if err != nil {
-			return fmt.Errorf("reading conditional field {{$field.Name}} ([]byte[dynamic length {{$field.Length}}]): %w", err)
+			return fmt.Errorf("reading conditional field {{$field.Name}} ([]byte[dynamic length %s]): %w", expressionStr, err)
 		}
 				{{else}}
 					{{$length := $field.Length | atoi}}
@@ -110,12 +175,44 @@ func (s *{{.StructName}}) Read(r io.Reader) error {
 	{{if eq $field.Type "string"}}
 		{{if $field.Length}}
 			{{if isExpressionLength $field}}
-	// Dynamic length string field: {{$field.Name}}
-	size := int({{$field.Length}}) // Calculate length from expression
-	b = make([]byte, size)
-	_, err = io.ReadFull(r, b) // Uses err
+	// Dynamic length string field: {{$field.Name}} using expression: {{$field.Length}}
+	expressionStr := ` + "`{{$field.Length}}`" + ` // Use backticks for raw string literal
+	expression, errExpr := govaluate.NewEvaluableExpressionWithFunctions(expressionStr, GetExpressionFunctions())
+	if errExpr != nil {
+		return fmt.Errorf("parsing length expression for {{$field.Name}} ('%s'): %w", expressionStr, errExpr)
+	}
+	parameters := map[string]interface{}{
+		"s":   s,   // Pass the current struct instance
+		"ctx": ctx, // Pass the context
+	}
+	evalResult, errEval := expression.Evaluate(parameters)
+	if errEval != nil {
+		return fmt.Errorf("evaluating length expression for {{$field.Name}} ('%s'): %w", expressionStr, errEval)
+	}
+	// Convert result to int (handle potential float64 from evaluator)
+	var size int
+	switch v := evalResult.(type) {
+	case float64: size = int(v)
+	case float32: size = int(v)
+	case int: size = v
+	case int64: size = int(v)
+	case int32: size = int(v)
+	case uint: size = int(v)
+	case uint64: size = int(v)
+	case uint32: size = int(v)
+	case uint16: size = int(v)
+	case uint8: size = int(v)
+	default:
+		return fmt.Errorf("length expression for {{$field.Name}} ('%s') evaluated to non-numeric type %T", expressionStr, evalResult)
+	}
+	if size < 0 {
+		return fmt.Errorf("length expression for {{$field.Name}} ('%s') evaluated to negative size %d", expressionStr, size)
+	}
+	
+	b = make([]byte, size) // Uses b var
+	_, err = io.ReadFull(r, b) // Uses err var
 	if err != nil {
-		return fmt.Errorf("reading {{$field.Name}} (string[dynamic length {{$field.Length}}]): %w", err)
+		return fmt.Errorf("reading {{$field.Name}} (string[dynamic length %s]): %w", expressionStr, err)
 	}
 	s.{{$field.Name}} = string(b)
 			{{else}}
@@ -159,12 +256,44 @@ func (s *{{.StructName}}) Read(r io.Reader) error {
 	{{else if eq $field.Type "[]byte"}}
 		{{if $field.Length}}
 			{{if isExpressionLength $field}}
-	// Dynamic length []byte field: {{$field.Name}}
-	size := int({{$field.Length}}) // Calculate length from expression
+	// Dynamic length []byte field: {{$field.Name}} using expression: {{$field.Length}}
+	expressionStr := ` + "`{{$field.Length}}`" + ` // Use backticks for raw string literal
+	expression, errExpr := govaluate.NewEvaluableExpressionWithFunctions(expressionStr, GetExpressionFunctions())
+	if errExpr != nil {
+		return fmt.Errorf("parsing length expression for {{$field.Name}} ('%s'): %w", expressionStr, errExpr)
+	}
+	parameters := map[string]interface{}{
+		"s":   s,   // Pass the current struct instance
+		"ctx": ctx, // Pass the context
+	}
+	evalResult, errEval := expression.Evaluate(parameters)
+	if errEval != nil {
+		return fmt.Errorf("evaluating length expression for {{$field.Name}} ('%s'): %w", expressionStr, errEval)
+	}
+	// Convert result to int (handle potential float64 from evaluator)
+	var size int
+	switch v := evalResult.(type) {
+	case float64: size = int(v)
+	case float32: size = int(v)
+	case int: size = v
+	case int64: size = int(v)
+	case int32: size = int(v)
+	case uint: size = int(v)
+	case uint64: size = int(v)
+	case uint32: size = int(v)
+	case uint16: size = int(v)
+	case uint8: size = int(v)
+	default:
+		return fmt.Errorf("length expression for {{$field.Name}} ('%s') evaluated to non-numeric type %T", expressionStr, evalResult)
+	}
+	if size < 0 {
+		return fmt.Errorf("length expression for {{$field.Name}} ('%s') evaluated to negative size %d", expressionStr, size)
+	}
+	
 	s.{{$field.Name}} = make([]byte, size)
-	_, err = io.ReadFull(r, s.{{$field.Name}}) // Uses err
+	_, err = io.ReadFull(r, s.{{$field.Name}}) // Uses err var
 	if err != nil {
-		return fmt.Errorf("reading {{$field.Name}} ([]byte[dynamic length {{$field.Length}}]): %w", err)
+		return fmt.Errorf("reading {{$field.Name}} ([]byte[dynamic length %s]): %w", expressionStr, err)
 	}
 			{{else}}
 				{{$length := $field.Length | atoi}}

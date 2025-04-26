@@ -2,9 +2,9 @@ package generator
 
 import (
 	"bytes"
-	"go/format"
 	"fmt"
 	"go/ast"
+	"go/format"
 	"go/parser"
 	"go/token"
 	"io/ioutil"
@@ -18,6 +18,7 @@ import (
 
 	"FormatModules/application_structs"
 
+	"github.com/knetic/govaluate"
 	"gopkg.in/yaml.v2"
 )
 
@@ -157,6 +158,23 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 
 	stubFilePath := filepath.Join(outputDir, targetStubName) // Define stub path early
 
+	// Rename stub file to avoid redeclaration errors during generation
+	if strings.HasSuffix(stubFilePath, "_stubs.go") {
+		newPath := strings.TrimSuffix(stubFilePath, ".go") + "._go"
+		if err := os.Rename(stubFilePath, newPath); err != nil {
+			log.Printf("Warning: Failed to rename stub file %s to %s: %v", stubFilePath, newPath, err)
+		} else {
+			stubFilePath = newPath
+			defer func() {
+				// Try to rename back after generation completes
+				originalPath := strings.TrimSuffix(stubFilePath, "._go") + ".go"
+				if err := os.Rename(stubFilePath, originalPath); err != nil {
+					log.Printf("Warning: Failed to rename stub file back to original name %s: %v", originalPath, err)
+				}
+			}()
+		}
+	}
+
 	// --- START DYNAMIC EXPECTATION PARSING ---
 	log.Printf("Parsing stub file %s for expected structure...", stubFilePath)
 	expectedStructs, err := parseStubFileForExpectedStructs(stubFilePath)
@@ -218,8 +236,16 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 					if !isValidLengthExpression(field.Length) {
 						return fmt.Errorf("validation error in struct '%s': field '%s' has invalid 'Length: %s'. Must be a positive integer or a valid Go expression (cannot be empty or '...')", structName, field.Name, field.Length)
 					}
-					// Passes basic expression checks (e.g., not "...")
-					log.Printf("Info: Field '%s.%s' uses expression length '%s'. Ensure the expression is valid Go code.", structName, field.Name, field.Length)
+
+					// Try to validate the expression with govaluate
+					_, errExpr := govaluate.NewEvaluableExpressionWithFunctions(field.Length, GetExpressionFunctions())
+					if errExpr != nil {
+						log.Printf("Warning: Field '%s.%s' has expression length '%s' that may not be valid: %v",
+							structName, field.Name, field.Length, errExpr)
+					}
+
+					// Passes basic expression checks
+					log.Printf("Info: Field '%s.%s' uses expression length '%s'. Ensure the expression is valid Go code referencing struct fields with 's.'.", structName, field.Name, field.Length)
 				}
 
 			case "uint8", "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64", "float32", "float64":
@@ -322,6 +348,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 		needsErrVarRead := false  // Flag specific to Read function
 		needsErrVarWrite := false // Flag specific to Write function
 		needsBVar := false
+		needsGovaluate := false // Flag for govaluate import
 
 		// Iterate through fields to determine needs accurately
 		for _, field := range structDef.Fields {
@@ -345,6 +372,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 					fieldUsesErrRead = true // io.ReadFull uses err
 				} else { // It's an expression
 					fieldUsesErrRead = true // Assume expression read uses err
+					needsGovaluate = true   // Need govaluate for expression evaluation
 				}
 				fieldUsesErrWrite = true // Write always uses err for string
 
@@ -358,6 +386,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 					fieldUsesErrRead = true // io.ReadFull uses err
 				} else { // It's an expression
 					fieldUsesErrRead = true // Assume expression read uses err
+					needsGovaluate = true   // Need govaluate for expression evaluation
 				}
 
 			default:
@@ -388,6 +417,12 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 		// Always include fmt if there are fields or potential errors
 		if needsFmt || len(structDef.Fields) > 0 {
 			requiredImports["fmt"] = true
+		}
+		// Add govaluate import if needed for expression evaluation
+		if needsGovaluate {
+			requiredImports["github.com/knetic/govaluate"] = true
+			// Also need our helper functions
+			requiredImports["FormatModules/generator"] = true
 		}
 
 		// Convert map keys to sorted slice for consistent import order

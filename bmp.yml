@@ -58,5 +58,5 @@ structs:
     fields:
       - name: PixelData
         type: "[]byte"
-        stringLength: "calculate" # set to keyword calculate, to calculate at run time
-        description: RGB pixel data
+        length: "CalculatePaddedSize(s.Width, s.Height, s.BitsPerPixel)" # Dynamic expression using helper function
+        description: RGB pixel data with padding

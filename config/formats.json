@@ -1,13 +1,18 @@
-
-
 [
   {
     "name": "BMP",
     "yamlFile": "bmp.yml",
     "outputDir": "bmp",
     "packageName": "bmp",
-    "resetStubSource": "bmp_stubs_source.go",
     "targetStub": "bmp_stubs.go",
-    "testFile": "bmp_test.go"
+    "testFile": "bmp/bmp_test.go"
+  },
+  {
+    "name": "Jpg",
+    "yamlFile": "jpg.yml",
+    "outputDir": "jpg",
+    "packageName": "jpg",
+    "targetStub": "jpg_stubs.go",
+    "testFile": "jpg/jpg_test.go"
   }
 ]

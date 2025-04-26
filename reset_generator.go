@@ -12,6 +12,19 @@ import (
 // reset cleans the target directory, preserving specified stub and test files.
 func reset(targetDir, stubFilePath, testFilePath string) { // Changed parameters
 	log.Printf("Starting generator reset for directory: %s", targetDir)
+
+	// First, rename any _stubs._go files back to _stubs.go
+	if strings.HasSuffix(stubFilePath, "_stubs.go") {
+		renamedPath := strings.TrimSuffix(stubFilePath, ".go") + "._go"
+		if _, err := os.Stat(renamedPath); err == nil {
+			if err := os.Rename(renamedPath, stubFilePath); err != nil {
+				log.Printf("Warning: Failed to rename stub file %s back to %s: %v", renamedPath, stubFilePath, err)
+			} else {
+				log.Printf("Renamed stub file back to original name: %s", stubFilePath)
+			}
+		}
+	}
+
 	log.Printf(" -> Preserving stub file: %s", stubFilePath)
 	log.Printf(" -> Preserving test file: %s", testFilePath)
 

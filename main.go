@@ -12,11 +12,13 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 
 	"FormatModules/application_structs"
 	"FormatModules/generator"
+
 	"gopkg.in/yaml.v2"
 )
 
@@ -48,7 +50,7 @@ type {{.Name}} struct {
 }
 
 // Dummy Read method
-func (s *{{.Name}}) Read(r io.Reader) error {
+func (s *{{.Name}}) Read(r io.Reader, ctx interface{}) error {
 	return nil
 }
 
@@ -98,7 +100,7 @@ func main() {
 	// Define flags
 	bootstrap := flag.Bool("bootstrap", false, "Enable bootstrapping mode to add a new format based on a YAML file")
 	yamlFile := flag.String("yaml", "", "Input YAML definition file (used only with -bootstrap)")
-	configPath := flag.String("config", "formats.json", "Path to the formats configuration JSON file")
+	configPath := flag.String("config", "", "Path to the formats configuration JSON file (default: checks config/formats.json first, then formats.json)")
 
 	flag.Parse()
 
@@ -110,7 +112,15 @@ func main() {
 			log.Fatal("Missing required flag for bootstrapping: -yaml <filename.yml>")
 		}
 		log.Println("--- Running Bootstrap ---")
-		err := runBootstrap(*yamlFile, *configPath)
+		// First try config/formats.json, fall back to formats.json if not specified
+		actualConfigPath := *configPath
+		if actualConfigPath == "" {
+			actualConfigPath = "config/formats.json"
+			if _, err := os.Stat(actualConfigPath); os.IsNotExist(err) {
+				actualConfigPath = "formats.json"
+			}
+		}
+		err := runBootstrap(*yamlFile, actualConfigPath)
 		if err != nil {
 			log.Fatalf("Bootstrapping failed: %v", err)
 		}
@@ -138,7 +148,15 @@ func main() {
 	// --- Normal Generation Logic ---
 	if proceedWithGeneration {
 		log.Println("--- Running Code Generation ---")
-		runGeneration(*configPath)
+		// First try config/formats.json, fall back to formats.json if not specified
+		actualConfigPath := *configPath
+		if actualConfigPath == "" {
+			actualConfigPath = "config/formats.json"
+			if _, err := os.Stat(actualConfigPath); os.IsNotExist(err) {
+				actualConfigPath = "formats.json"
+			}
+		}
+		runGeneration(actualConfigPath)
 		log.Println("--- Code Generation Complete ---")
 	}
 }
@@ -151,13 +169,40 @@ func runBootstrap(yamlFile, configPath string) error {
 		return fmt.Errorf("could not derive base name from YAML file: %s", yamlFile)
 	}
 
+	// Try to find format in config
+	var formatConfig *struct {
+		Name        string `json:"name"`
+		OutputDir   string `json:"outputDir"`
+		PackageName string `json:"packageName"`
+	}
+	formatsData, _ := ioutil.ReadFile("config/formats.json")
+	var formats []struct {
+		Name        string `json:"name"`
+		OutputDir   string `json:"outputDir"`
+		PackageName string `json:"packageName"`
+	}
+	if err := json.Unmarshal(formatsData, &formats); err == nil {
+		for _, f := range formats {
+			if strings.EqualFold(f.Name, yamlBaseName) {
+				formatConfig = &f
+				break
+			}
+		}
+	}
+
+	// Set defaults from config or derive from filename
 	formatName := strings.Title(yamlBaseName)
 	outputDir := strings.ToLower(yamlBaseName)
 	packageName := outputDir
+	if formatConfig != nil {
+		formatName = formatConfig.Name
+		outputDir = formatConfig.OutputDir
+		packageName = formatConfig.PackageName
+	}
 
 	// --- Define file paths ---
 	// Stub file path *inside* the outputDir
-	targetStubPath := filepath.Join(outputDir, fmt.Sprintf("%s_stubs.go", outputDir)) // <-- Direct path
+	targetStubPath := fmt.Sprintf("%s_stubs.go", outputDir) // Just filename, will be joined with outputDir later
 	// Test file path *inside* the outputDir
 	testFilePath := filepath.Join(outputDir, fmt.Sprintf("%s_test.go", outputDir))
 
@@ -310,6 +355,37 @@ func runBootstrap(yamlFile, configPath string) error {
 	return nil
 }
 
+// --- Format Selection Helper ---
+func showFormatSelection(formatConfigs []FormatConfig) ([]FormatConfig, error) {
+	reader := bufio.NewReader(os.Stdin)
+
+	// Display available formats
+	fmt.Println("Available formats:")
+	for i, config := range formatConfigs {
+		fmt.Printf("%d. %s\n", i+1, config.Name)
+	}
+
+	// Prompt for selection
+	fmt.Print("\nSelect format to generate (number), or press Enter for all: ")
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return nil, fmt.Errorf("failed to read input: %v", err)
+	}
+
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return formatConfigs, nil // Return all if no selection
+	}
+
+	// Parse selection
+	selected, err := strconv.Atoi(input)
+	if err != nil || selected < 1 || selected > len(formatConfigs) {
+		return nil, fmt.Errorf("invalid selection: please enter a number between 1 and %d", len(formatConfigs))
+	}
+
+	return []FormatConfig{formatConfigs[selected-1]}, nil
+}
+
 // --- Normal Generation Function (Modified) ---
 func runGeneration(configPath string) {
 	log.Println("Reading formats configuration from", configPath)
@@ -324,9 +400,15 @@ func runGeneration(configPath string) {
 		log.Fatalf("Failed to parse %s: %v", configPath, err)
 	}
 
-	log.Printf("Found %d format(s) to process.", len(formatConfigs))
+	// Get selected formats
+	selectedConfigs, err := showFormatSelection(formatConfigs)
+	if err != nil {
+		log.Fatalf("Format selection failed: %v", err)
+	}
 
-	for _, config := range formatConfigs {
+	log.Printf("Processing %d selected format(s).", len(selectedConfigs))
+
+	for _, config := range selectedConfigs {
 		log.Printf("Processing format: %s", config.Name)
 
 		fmt.Printf("Running generator reset for %s...\n", config.Name)
@@ -343,8 +425,8 @@ func runGeneration(configPath string) {
 			log.Fatalf("%s: Failed to create output directory %s: %v", config.Name, config.OutputDir, err)
 		}
 
-		// Pass the TargetStub path (which includes the directory) to GenerateCode
-		err := generator.GenerateCode(config.YAMLFile, config.OutputDir, config.PackageName, config.TargetStub)
+		// Pass just the filename to GenerateCode and let it construct the full path
+		err := generator.GenerateCode(config.YAMLFile, config.OutputDir, config.PackageName, filepath.Base(config.TargetStub))
 		if err != nil {
 			log.Fatalf("%s: Error generating code: %v", config.Name, err)
 		}
@@ -352,5 +434,5 @@ func runGeneration(configPath string) {
 		fmt.Println("---")
 	}
 
-	log.Println("All configured formats processed.")
+	log.Println("Selected format(s) processed.")
 }
