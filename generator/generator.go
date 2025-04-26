@@ -16,7 +16,7 @@ import (
 	"strings"
 	"text/template"
 
-	"FormatModules/structs"
+	"FormatModules/application_structs"
 
 	"gopkg.in/yaml.v2"
 )
@@ -26,7 +26,7 @@ type TemplateData struct {
 	PackageName      string
 	Imports         []string
 	StructName       string
-	Fields           []structs.Field
+	Fields           []application_structs.Field
 	FieldMap         map[string]string
 	// Flags to control variable declarations in the template
 	NeedsErrVarRead  bool // True if any read operation generates code that uses 'err'
@@ -40,9 +40,15 @@ func atoi(s string) int {
 	return i
 }
 
+// ExpectedStruct holds both the field types and their order from the stub
+type ExpectedStruct struct {
+	FieldTypes map[string]string
+	FieldOrder []string
+}
+
 // parseStubFileForExpectedStructs reads a Go stub file and extracts struct definitions.
-func parseStubFileForExpectedStructs(stubFilePath string) (map[string]map[string]string, error) {
-	expected := make(map[string]map[string]string)
+func parseStubFileForExpectedStructs(stubFilePath string) (map[string]ExpectedStruct, error) {
+	expected := make(map[string]ExpectedStruct)
 	fset := token.NewFileSet() // Positions are relative to fset
 
 	// Parse the Go source file
@@ -75,9 +81,12 @@ func parseStubFileForExpectedStructs(stubFilePath string) (map[string]map[string
 				continue // Not a struct, skip
 			}
 
-			// Initialize map for this struct if not already present
+			// Initialize struct for this struct if not already present
 			if _, exists := expected[structName]; !exists {
-				expected[structName] = make(map[string]string)
+				expected[structName] = ExpectedStruct{
+					FieldTypes: make(map[string]string),
+					FieldOrder: []string{},
+				}
 			}
 
 			// Iterate through the fields of the struct
@@ -106,7 +115,11 @@ func parseStubFileForExpectedStructs(stubFilePath string) (map[string]map[string
 					for _, name := range field.Names {
 						fieldName := name.Name
 						if fieldType != "" { // Only add if we could determine the type
-							expected[structName][fieldName] = fieldType
+							// Get the struct from map (or create new if not exists)
+							expectedStruct := expected[structName]
+							expectedStruct.FieldTypes[fieldName] = fieldType
+							expectedStruct.FieldOrder = append(expectedStruct.FieldOrder, fieldName)
+							expected[structName] = expectedStruct
 						} else {
 							log.Printf("Warning: Could not determine type for field '%s' in stub struct '%s'", fieldName, structName)
 						}
@@ -139,7 +152,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 		// For now, let's make it non-fatal but log prominently.
 		log.Printf("Warning: Failed to parse stub file '%s' to build expectations: %v. Proceeding without validation.", stubFilePath, err)
 		// Optionally clear the map if parsing failed partially
-		expectedStructs = make(map[string]map[string]string) // Ensure it's empty if parsing failed
+		expectedStructs = make(map[string]ExpectedStruct) // Ensure it's empty if parsing failed
 	} else if len(expectedStructs) > 0 {
 		log.Println("Successfully parsed stub file for expectations.")
 	} else {
@@ -155,7 +168,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 	log.Println("Successfully read YAML file.")
 
 	// 2. Unmarshal the YAML data
-	var fileFormat structs.FileFormat
+	var fileFormat application_structs.FileFormat
 	err = yaml.Unmarshal(data, &fileFormat)
 	if err != nil {
 		// Provide more context on YAML parsing errors
@@ -169,6 +182,30 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 	}
 	log.Println("Successfully unmarshaled YAML data.")
 
+	// Validate YAML against stub expectations if available
+	if len(expectedStructs) > 0 {
+		for structName, structDef := range fileFormat.Structs {
+			if expected, exists := expectedStructs[structName]; exists {
+				// Check for extra fields in YAML that aren't in stub
+				for _, field := range structDef.Fields {
+					if _, exists := expected.FieldTypes[field.Name]; !exists {
+						log.Printf("Warning: Field '%s' in struct '%s' is not present in stub file", field.Name, structName)
+					}
+				}
+
+				// Check field order matches stub
+				if len(expected.FieldOrder) == len(structDef.Fields) {
+					for i, field := range structDef.Fields {
+						if i < len(expected.FieldOrder) && field.Name != expected.FieldOrder[i] {
+							log.Printf("Warning: Field order mismatch in struct '%s' - expected '%s' at position %d but found '%s'",
+								structName, expected.FieldOrder[i], i, field.Name)
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// Ensure output directory exists
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to ensure output directory %s exists: %w", outputDir, err)
@@ -177,7 +214,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 	// 3. Parse the main template once, registering custom functions
 	tmpl := template.New("struct").Funcs(template.FuncMap{
 		"atoi": atoi,
-		"isExpressionLength": func(f structs.Field) bool {
+		"isExpressionLength": func(f application_structs.Field) bool {
 			return f.IsExpressionLength()
 		},
 	})

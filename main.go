@@ -10,15 +10,16 @@ import (
 	"os"
 	"path/filepath"
 
+	"FormatModules/config"    // For shared constants
 	"FormatModules/generator" // Assuming correct path
 )
 
 func main() {
 	// Define flags
-	yamlFile := flag.String("yaml", "full_bmp.yml", "Input YAML definition file")
-	outputDir := flag.String("output", "fullbmp", "Output directory for generated code")
-	resetStubSource := flag.String("reset-stub", "fullbmp_stubs_source.go", "Source stub file for reset")
-	targetStubName := flag.String("target-stub", "fullbmp_stubs.go", "Name of the stub file in the output directory")
+	yamlFile := flag.String("yaml", config.DefaultYAMLFile, "Input YAML definition file")
+	outputDir := flag.String("output", config.DefaultOutputDir, "Output directory for generated code")
+	resetStubSource := flag.String("reset-stub", config.DefaultResetStub, "Source stub file for reset")
+	targetStubName := flag.String("target-stub", config.DefaultTargetStub, "Name of the stub file in the output directory")
 
 	flag.Parse() // Parse command-line arguments
 

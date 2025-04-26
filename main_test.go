@@ -9,8 +9,15 @@ import (
 	"reflect" // Import reflect package for DeepEqual
 	"testing" // Import testing package
 
-	"FormatModules/fullbmp" // Assuming this is the correct import path
+	"FormatModules/bmp" // Assuming this is the correct import path
 )
+
+// resetArgs saves and restores os.Args for testing flag parsing
+func resetArgs(newArgs []string) func() {
+	oldArgs := os.Args
+	os.Args = newArgs
+	return func() { os.Args = oldArgs }
+}
 
 // Constants for test data
 const (
@@ -41,7 +48,7 @@ func TestGeneratedCode(t *testing.T) { // Changed to a test function
 	fileSize := dataOffset + pixelDataSize
 
 	// Create instances with test data
-	originalHeader := fullbmp.FileHeader{
+	originalHeader := bmp.FileHeader{
 		Signature:  "BM",
 		FileSize:   fileSize,
 		Reserved1:  0, // Assuming Reserved1/2 based on typical BMP structure
@@ -50,18 +57,18 @@ func TestGeneratedCode(t *testing.T) { // Changed to a test function
 	}
 
 	// Initialize InfoHeader with all standard fields
-	originalInfoHeader := fullbmp.InfoHeader{
+	originalInfoHeader := bmp.InfoHeader{
 		HeaderSize:      dibHeaderSize, // Standard BITMAPINFOHEADER size (40)
-		Width:          uint32(testWidth),
-		Height:         uint32(testHeight),
-		Planes:         1,
-		BitsPerPixel:   testBits,
-		Compression:    0, // BI_RGB (uncompressed)
-		ImageSize:      pixelDataSize,
+		Width:           uint32(testWidth),
+		Height:          uint32(testHeight),
+		Planes:          1,
+		BitsPerPixel:    testBits,
+		Compression:     0, // BI_RGB (uncompressed)
+		ImageSize:       pixelDataSize,
 		XPixelsPerMeter: 2835, // Example value (~72 DPI)
 		YPixelsPerMeter: 2835, // Example value (~72 DPI)
-		ColorsUsed:     0,    // 0 for 24-bit
-		ImportantColors: 0,   // 0 for all colors important
+		ColorsUsed:      0,    // 0 for 24-bit
+		ImportantColors: 0,    // 0 for all colors important
 	}
 
 	// Create simple pixel data
@@ -132,8 +139,8 @@ func TestGeneratedCode(t *testing.T) { // Changed to a test function
 	}
 
 	var readErr error
-	readHeader := fullbmp.FileHeader{}
-	readInfoHeader := fullbmp.InfoHeader{}
+	readHeader := bmp.FileHeader{}
+	readInfoHeader := bmp.InfoHeader{}
 	var readPixelData []byte
 
 	func() {
@@ -215,3 +222,4 @@ func TestGeneratedCode(t *testing.T) { // Changed to a test function
 	log.Println("Phase 3: Verification finished.")
 	log.Println("Generated code test completed.")
 }
+

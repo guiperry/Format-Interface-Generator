@@ -1,5 +1,5 @@
 // project/structs/structs.go
-package structs
+package application_structs
 
 import (
 	"fmt"
