@@ -29,7 +29,11 @@ func TestGeneratedCode(t *testing.T) { // Changed to a test function
 
 	// --- Test Data Setup ---
 	// Calculate sizes based on constants
-	pixelDataSize := uint32(testWidth * testHeight * (testBits / 8))
+	// Calculate pixel data size with padding (each row must be multiple of 4 bytes)
+	bytesPerRow := testWidth * int(testBits/8)
+	paddingPerRow := (4 - (bytesPerRow % 4)) % 4
+	paddedRowSize := bytesPerRow + paddingPerRow
+	pixelDataSize := uint32(testHeight * paddedRowSize)
 	// Assuming standard header sizes based on common BMP format
 	dibHeaderSize := uint32(40) // Standard BITMAPINFOHEADER size - Check if your YAML defines this struct differently
 	fileHeaderSize := uint32(14)
@@ -45,27 +49,30 @@ func TestGeneratedCode(t *testing.T) { // Changed to a test function
 		DataOffset: dataOffset,
 	}
 
-	// Adjust InfoHeader initialization based on compiler errors
+	// Initialize InfoHeader with all standard fields
 	originalInfoHeader := fullbmp.InfoHeader{
-		// Size:            dibHeaderSize, // Removed: Unknown field 'Size'
-		Width:           uint32(testWidth),  // Corrected type: uint32
-		Height:          uint32(testHeight), // Corrected type: uint32
-		Planes:          1,
-		BitsPerPixel:    testBits,
-		Compression:     0, // BI_RGB (uncompressed)
-		ImageSize:       pixelDataSize,
+		HeaderSize:      dibHeaderSize, // Standard BITMAPINFOHEADER size (40)
+		Width:          uint32(testWidth),
+		Height:         uint32(testHeight),
+		Planes:         1,
+		BitsPerPixel:   testBits,
+		Compression:    0, // BI_RGB (uncompressed)
+		ImageSize:      pixelDataSize,
 		XPixelsPerMeter: 2835, // Example value (~72 DPI)
 		YPixelsPerMeter: 2835, // Example value (~72 DPI)
-		ColorsUsed:      0,    // 0 for 24-bit
-		// ColorsImportant: 0, // Removed: Unknown field 'ColorsImportant'
+		ColorsUsed:     0,    // 0 for 24-bit
+		ImportantColors: 0,   // 0 for all colors important
 	}
 
 	// Create simple pixel data
+	// Create pixel data with proper padding (2 bytes per row for 2x2 24bpp image)
 	originalPixelData := []byte{
 		0, 0, 255, // Pixel (0,0) Red (BGR order)
 		0, 255, 0, // Pixel (1,0) Green
+		0, 0, // Padding for first row
 		255, 0, 0, // Pixel (0,1) Blue
 		255, 255, 255, // Pixel (1,1) White
+		0, 0, // Padding for second row
 	}
 	if uint32(len(originalPixelData)) != pixelDataSize {
 		// Use t.Fatalf for test failures
@@ -148,10 +155,13 @@ func TestGeneratedCode(t *testing.T) { // Changed to a test function
 		}
 		log.Println("-> InfoHeader read.")
 
-		// Corrected calculation with type conversion
-		expectedPixelDataSize := int(readInfoHeader.Width * readInfoHeader.Height * (uint32(readInfoHeader.BitsPerPixel) / 8)) // Convert BitsPerPixel
+		// Calculate expected size including padding (same logic as write phase)
+		readBytesPerRow := int(readInfoHeader.Width) * int(readInfoHeader.BitsPerPixel/8)
+		readPaddingPerRow := (4 - (readBytesPerRow % 4)) % 4
+		readPaddedRowSize := readBytesPerRow + readPaddingPerRow
+		expectedPixelDataSize := int(readInfoHeader.Height) * readPaddedRowSize
 		if expectedPixelDataSize <= 0 {
-			readErr = fmt.Errorf("invalid calculated pixel data size: %d", expectedPixelDataSize)
+			readErr = fmt.Errorf("invalid calculated pixel data size (with padding): %d", expectedPixelDataSize)
 			return
 		}
 		readPixelData = make([]byte, expectedPixelDataSize)
