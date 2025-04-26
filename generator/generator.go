@@ -2,7 +2,11 @@ package generator
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io/ioutil"
 	"log"
 	"os"
@@ -36,9 +40,113 @@ func atoi(s string) int {
 	return i
 }
 
+// parseStubFileForExpectedStructs reads a Go stub file and extracts struct definitions.
+func parseStubFileForExpectedStructs(stubFilePath string) (map[string]map[string]string, error) {
+	expected := make(map[string]map[string]string)
+	fset := token.NewFileSet() // Positions are relative to fset
+
+	// Parse the Go source file
+	node, err := parser.ParseFile(fset, stubFilePath, nil, parser.ParseComments)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("failed to parse stub file %s: %v", stubFilePath, err))
+	}
+
+	// Inspect the AST
+	ast.Inspect(node, func(n ast.Node) bool {
+		// Look for type declarations (like "type MyStruct struct { ... }")
+		decl, ok := n.(*ast.GenDecl)
+		if !ok || decl.Tok != token.TYPE {
+			// Not a type declaration, continue traversal
+			return true
+		}
+
+		// Iterate through the specs in the declaration (could be multiple types in one block)
+		for _, spec := range decl.Specs {
+			typeSpec, ok := spec.(*ast.TypeSpec)
+			if !ok {
+				continue
+			}
+
+			structName := typeSpec.Name.Name
+
+			// Check if it's a struct type
+			structType, ok := typeSpec.Type.(*ast.StructType)
+			if !ok {
+				continue // Not a struct, skip
+			}
+
+			// Initialize map for this struct if not already present
+			if _, exists := expected[structName]; !exists {
+				expected[structName] = make(map[string]string)
+			}
+
+			// Iterate through the fields of the struct
+			if structType.Fields != nil {
+				for _, field := range structType.Fields.List {
+					// Get the field type as a string
+					fieldType := ""
+					// Handle different ways types can be represented in AST
+					// This is a simplified version; more complex types (e.g., pointers, slices) might need more handling
+					if ident, ok := field.Type.(*ast.Ident); ok {
+						fieldType = ident.Name
+					} else if selExpr, ok := field.Type.(*ast.SelectorExpr); ok {
+						// Handles types like pkg.Type (e.g., time.Time) - unlikely in basic stubs but good practice
+						if pkgIdent, ok := selExpr.X.(*ast.Ident); ok {
+							fieldType = pkgIdent.Name + "." + selExpr.Sel.Name
+						}
+					} else if arrType, ok := field.Type.(*ast.ArrayType); ok {
+						// Handle slice types like []byte
+						if eltIdent, ok := arrType.Elt.(*ast.Ident); ok {
+							fieldType = "[]" + eltIdent.Name
+						}
+					}
+					// Add more type handlers if needed (e.g., *ast.StarExpr for pointers)
+
+					// Get the field name(s) - usually one per line
+					for _, name := range field.Names {
+						fieldName := name.Name
+						if fieldType != "" { // Only add if we could determine the type
+							expected[structName][fieldName] = fieldType
+						} else {
+							log.Printf("Warning: Could not determine type for field '%s' in stub struct '%s'", fieldName, structName)
+						}
+					}
+				}
+			}
+		}
+		return true // Continue traversal
+	})
+
+	if len(expected) == 0 {
+		log.Printf("Warning: No struct definitions found in stub file %s", stubFilePath)
+	}
+
+	return expected, nil
+}
+
 // GenerateCode takes the YAML description, generates Go code, and handles imports dynamically.
 func GenerateCode(yamlFile, outputDir, packageName string) error {
 	log.Printf("Starting code generation for file: %s, outputting to: %s (package %s)", yamlFile, outputDir, packageName)
+
+	stubFilePath := filepath.Join(outputDir, "fullbmp_stubs.go") // Define stub path early
+
+	// --- START DYNAMIC EXPECTATION PARSING ---
+	log.Printf("Parsing stub file %s for expected structure...", stubFilePath)
+	expectedStructs, err := parseStubFileForExpectedStructs(stubFilePath)
+	if err != nil {
+		// If parsing fails (e.g., file not found), log a warning but maybe continue?
+		// Or make it a fatal error depending on your workflow.
+		// For now, let's make it non-fatal but log prominently.
+		log.Printf("Warning: Failed to parse stub file '%s' to build expectations: %v. Proceeding without validation.", stubFilePath, err)
+		// Optionally clear the map if parsing failed partially
+		expectedStructs = make(map[string]map[string]string) // Ensure it's empty if parsing failed
+	} else if len(expectedStructs) > 0 {
+		log.Println("Successfully parsed stub file for expectations.")
+	} else {
+		log.Println("No struct expectations loaded from stub file (file might be empty or contain no structs).")
+	}
+	// --- END DYNAMIC EXPECTATION PARSING ---
+
 	// 1. Read the YAML file
 	data, err := ioutil.ReadFile(yamlFile)
 	if err != nil {
@@ -200,8 +308,30 @@ func GenerateCode(yamlFile, outputDir, packageName string) error {
 		log.Printf("Generated %s", outputPath)
 		
 	}
+
+	// --- START STUB REMOVAL STEP ---
+	// Check if the stub file exists before trying to remove it
+	if _, err := os.Stat(stubFilePath); err == nil {
+		// Stub file exists, attempt to remove it
+		log.Printf("Removing stub file: %s", stubFilePath)
+		if err := os.Remove(stubFilePath); err != nil {
+			// Log a warning if removal fails, but don't fail the whole process
+			log.Printf("Warning: Failed to remove stub file %s: %v", stubFilePath, err)
+		}
+	} else if !os.IsNotExist(err) {
+		// Log warning if there was an error checking for the stub file (other than not existing)
+		log.Printf("Warning: Error checking for stub file %s: %v", stubFilePath, err)
+	} else {
+		// Stub file doesn't exist, which is fine after the first successful run
+		// log.Printf("Stub file %s does not exist, skipping removal.", stubFilePath) // Optional log message
+	}
+
 	// 6. Log success and return nil only after the loop finishes
 	log.Println("Code generation completed successfully.")
 	return nil
+	// --- END STUB REMOVAL STEP ---
 
+	// 6. Log success and return nil only after the loop finishes
+	log.Println("Code generation completed successfully.")
+	return nil
 }

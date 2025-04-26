@@ -16,7 +16,7 @@ func writeBinary(f *os.File, data interface{}) error {
 	return binary.Write(f, binary.LittleEndian, data)
 }
 
-func main() { // Changed signature: removed 'error' return type
+func getTestBMP() { // Changed signature: removed 'error' return type
 	f, err := os.Create("test.bmp")
 	if err != nil {
 		// Handle error inside main: log and exit
