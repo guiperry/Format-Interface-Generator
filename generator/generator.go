@@ -35,6 +35,7 @@ type TemplateData struct {
 	NeedsErrVarRead  bool // True if any read operation generates code that uses 'err'
 	NeedsErrVarWrite bool // True if any write operation generates code that uses 'err'
 	NeedsBVar        bool // True if any string read operation generates code that uses 'b'
+	NeedsTmpUint8    bool 
 }
 
 // atoi helper function (keep as is)
@@ -57,10 +58,9 @@ func IsValidLengthExpression(expr string) bool {
 
 // GenerateCode takes the YAML description, generates Go code, and handles imports dynamically.
 // Assumes YAML is pre-validated. targetStubName is ignored.
-func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error { // targetStubName is now ignored
+func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error {
+	// ... (Read YAML, Unmarshal YAML, Ensure output dir exists) ...
 	log.Printf("Starting code generation for validated YAML: %s, outputting to: %s (package %s)", yamlFile, outputDir, packageName)
-
-	// --- Stub Parsing and Renaming Removed ---
 
 	// 1. Read the YAML file (this is the *reformed* YAML)
 	data, err := ioutil.ReadFile(yamlFile)
@@ -73,7 +73,6 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 	var fileFormat application_structs.FileFormat
 	err = yaml.Unmarshal(data, &fileFormat)
 	if err != nil {
-		// Still possible to have errors if reformed YAML is malformed somehow
 		yamlErr, ok := err.(*yaml.TypeError)
 		if ok {
 			for _, msg := range yamlErr.Errors {
@@ -84,15 +83,14 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 	}
 	log.Println("Successfully unmarshaled YAML data.")
 
-	// --- YAML VALIDATION BLOCK REMOVED ---
-	// --- Stub Validation Block Removed ---
-
 	// Ensure output directory exists
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to ensure output directory %s exists: %w", outputDir, err)
 	}
 
+
 	// 3. Parse the main template once...
+	// ... (template parsing logic remains the same) ...
 	tmpl := template.New("struct").Funcs(template.FuncMap{
 		"atoi": atoi,
 		"isExpressionLength": func(f application_structs.Field) bool {
@@ -118,64 +116,67 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 	}
 	log.Println("Successfully parsed base template.")
 
+
 	// 4. For each struct defined in the YAML, execute the template
 	for structName, structDef := range fileFormat.Structs {
 		log.Printf("Generating code for struct: %s", structName)
 
 		// 4A. Determine required imports, build field map, AND check variable needs
-		requiredImports := map[string]bool{"io": true} // Base import
+		requiredImports := map[string]bool{"io": true}
 		fieldMap := make(map[string]string)
 		needsBinary := false
 		needsFmt := false
 		needsErrVarRead := false
 		needsErrVarWrite := false
 		needsBVar := false
+		needsTmpUint8 := false // <-- Initialize flag
 		needsGovaluate := false
-		needsGeneratorHelpers := false // Flag if GetExpressionFunctions is needed
+		needsGeneratorHelpers := false
 
 		// Iterate through fields to determine needs accurately
 		for _, field := range structDef.Fields {
 			fieldMap[field.Name] = field.Type
 			fieldUsesErrRead := false
 			fieldUsesErrWrite := false
-			
 
-			// Check if length is an expression
 			_, errConv := strconv.Atoi(field.Length)
 			if errConv != nil && field.Length != "" && field.Length != "NEEDS_MANUAL_LENGTH" {
-				
 				needsGovaluate = true
-				needsGeneratorHelpers = true // Assume helpers are needed if expressions are used
+				needsGeneratorHelpers = true
 			}
 
 			switch field.Type {
-			case "uint8", "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64", "float32", "float64":
+			case "uint8": // <-- Check for uint8
+				needsTmpUint8 = true // <-- Set the flag if found
 				needsBinary = true
-				needsFmt = true // For errors
+				needsFmt = true
+				fieldUsesErrRead = true
+				fieldUsesErrWrite = true
+			case "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64", "float32", "float64":
+				needsBinary = true
+				needsFmt = true
 				fieldUsesErrRead = true
 				fieldUsesErrWrite = true
 			case "string":
-				needsFmt = true // For errors
-				needsBVar = true // For reading into byte slice
+				needsFmt = true
+				needsBVar = true
 				if field.Length != "" && field.Length != "NEEDS_MANUAL_LENGTH" {
-					fieldUsesErrRead = true // io.ReadFull or expression eval uses err
+					fieldUsesErrRead = true
 				}
-				fieldUsesErrWrite = true // Write always uses err
+				fieldUsesErrWrite = true
 
 			case "[]byte":
-				needsFmt = true // For errors
+				needsFmt = true
 				if field.Length != "" && field.Length != "NEEDS_MANUAL_LENGTH" {
-					fieldUsesErrRead = true // io.ReadFull or expression eval uses err
+					fieldUsesErrRead = true
 				}
-				fieldUsesErrWrite = true // Write always uses err
+				fieldUsesErrWrite = true
 
 			default:
-				// Custom struct types might need fmt for errors
 				needsFmt = true
 				log.Printf("Info: Field '%s.%s' has custom type '%s'. Manual Read/Write implementation might be needed.", structName, field.Name, field.Type)
 			}
 
-			// Aggregate flags
 			if fieldUsesErrRead {
 				needsErrVarRead = true
 			}
@@ -185,6 +186,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 		}
 
 		// Determine imports based on flags
+		// ... (import logic remains the same) ...
 		if needsBinary {
 			requiredImports["encoding/binary"] = true
 		}
@@ -199,6 +201,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 			// Adjust if moved to a different shared package
 			requiredImports["FormatModules/generator"] = true
 		}
+
 
 		// Convert map keys to sorted slice for consistent import order
 		importsList := make([]string, 0, len(requiredImports))
@@ -218,9 +221,11 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 			NeedsErrVarRead:  needsErrVarRead,
 			NeedsErrVarWrite: needsErrVarWrite,
 			NeedsBVar:        needsBVar,
+			NeedsTmpUint8:    needsTmpUint8, // <-- Pass the flag
 		}
 
 		// 4C. Execute the template
+		// ... (template execution, formatting, writing remain the same) ...
 		var output bytes.Buffer
 		err = tmpl.Execute(&output, templateData)
 		if err != nil {
@@ -246,9 +251,6 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 
 	} // End loop through structs
 
-	// --- Stub Removal Step Removed ---
-
-	// 6. Log success
 	log.Println("Code generation completed successfully.")
 	return nil
 }

@@ -1,0 +1,94 @@
+name: ""
+description: ""
+structs:
+  APP0Payload:
+    fields:
+    - name: Identifier
+      type: string
+      description: Should be 'JFIF' followed by a null terminator
+      length: "5"
+    - name: VersionMajor
+      type: uint8
+      description: JFIF Major version number
+    - name: VersionMinor
+      type: uint8
+      description: JFIF Minor version number
+    - name: DensityUnits
+      type: uint8
+      description: 'Units for Xdensity and Ydensity (0: no units, 1: pixels per inch,
+        2: pixels per cm)'
+    - name: Xdensity
+      type: uint16
+      description: Horizontal pixel density
+    - name: Ydensity
+      type: uint16
+      description: Vertical pixel density
+    - name: Xthumbnail
+      type: uint8
+      description: Thumbnail horizontal pixel count
+    - name: Ythumbnail
+      type: uint8
+      description: Thumbnail vertical pixel count
+  DHTPayload:
+    fields:
+    - name: HuffmanData
+      type: '[]byte'
+      description: Raw data containing table class/index, code counts, and values
+      length: ctx.SegmentLength - 2
+  DQTPayload:
+    fields:
+    - name: QuantizationData
+      type: '[]byte'
+      description: Raw data containing precision/index and table values
+      length: ctx.SegmentLength - 2
+  EOI:
+    fields:
+    - name: Marker
+      type: uint16
+      description: ""
+  GenericSegment:
+    fields:
+    - name: Marker
+      type: uint16
+      description: Segment marker (e.g., 0xFFE0 for APP0)
+    - name: Length
+      type: uint16
+      description: Length of the segment payload (including the length field itself)
+    - name: Payload
+      type: '[]byte'
+      description: The actual segment data, excluding the marker
+      length: s.Length - 2
+  SOF0Payload:
+    fields:
+    - name: Precision
+      type: uint8
+      description: Sample precision (usually 8 bits)
+    - name: Height
+      type: uint16
+      description: Image height in pixels
+    - name: Width
+      type: uint16
+      description: Image width in pixels
+    - name: NumberOfComponents
+      type: uint8
+      description: Number of image components (e.g., 1 for grayscale, 3 for YCbCr)
+    - name: ComponentData
+      type: '[]byte'
+      description: Raw data for component specifications (ID, Sampling Factors, QT
+        Index)
+      length: s.NumberOfComponents * 3
+  SOI:
+    fields:
+    - name: Marker
+      type: uint16
+      description: ""
+  SOSPayload:
+    fields:
+    - name: Ns
+      type: uint8
+      description: Number of image components in scan
+    - name: ScanHeader
+      type: '[]byte'
+      description: Component selectors (Csj, Tdj/Taj), Spectral selection (Ss, Se),
+        Approx. bits (Ah, Al)
+      length: s.Ns * 2 + 4

@@ -4,5 +4,11 @@
     "yamlFile": "sources/bmp.yml",
     "outputDir": "formats/bmp",
     "packageName": "bmp"
+  },
+  {
+    "name": "Jpg",
+    "yamlFile": "sources/jpg.yml",
+    "outputDir": "formats/jpg",
+    "packageName": "jpg"
   }
 ]
