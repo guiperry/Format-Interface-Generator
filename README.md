@@ -86,3 +86,90 @@ structs:
         condition: "(s.flags & 0x01) != 0" # Example: Read only if first flag bit is set
 
   # Add other structs as needed...
+```
+
+## YAML Field Attributes:
+
+*   **`name`:** (Required) The name of the field in the generated Go struct.
+*   **`type`:** (Required) The Go type (e.g., `uint8`, `string`, `[]byte`, `MyOtherStruct`).
+*   **`description`:** (Optional) A comment added to the generated struct field.
+*   **`length`:** (Required for `string`, `[]byte`) Specifies the length.
+    *   Can be a positive integer (e.g., `5`).
+    *   Can be a Go expression string evaluating to an integer. Use `s.` to refer to fields within the same struct (e.g., `"s.Count * 4"`). Use `ctx.` to refer to fields from the context passed to the `Read` method (e.g., `"ctx.HeaderSize - 2"`).
+    *   Use `NEEDS_MANUAL_LENGTH` if the length requires complex logic not expressible here; the generator will insert TODO comments.
+*   **`condition`:** (Optional) A Go expression string. If present, the field is only read/written if the condition evaluates to true at runtime. Use `s.` to refer to fields within the same struct.
+*   **`tags`:** (Optional) A string containing Go struct tags to be added to the generated field (e.g., ``json:"myName" xml:"name"``).
+
+## Bootstrapping Formats
+
+The bootstrap phase validates your source YAML, reforms it (handling case and placeholders), saves the reformed version, and updates the `formats.json` configuration.
+
+*   **Run the bootstrap command:**
+
+    ```bash
+    go run . -bootstrap
+    ```
+
+*   The tool will scan the `sources/` directory.
+*   You will be prompted to select which YAML file(s) to bootstrap.
+*   For each selected file:
+    *   Validation and reformation occur. Errors will be reported.
+    *   The reformed YAML is saved (e.g., `formats/myformat/myformat.yml`).
+    *   `formats.json` is updated with the format's configuration.
+
+## Generating Code
+
+This phase generates the Go code based on the reformed YAML files listed in `formats.json`.
+
+*   **Run the generation command:**
+
+    ```bash
+    go run .
+    ```
+
+*   The tool will read `formats.json`.
+*   You will be prompted to select which configured format(s) to generate code for.
+*   For each selected format:
+    *   Existing `.go` files in the target directory (e.g., `formats/myformat/`) are removed (the reformed YAML is kept).
+    *   The generator reads the reformed YAML (e.g., `formats/myformat/myformat.yml`).
+    *   Go files (e.g., `formats/myformat/myheader.go`, `formats/myformat/mypayload.go`) are generated.
+    *   You will be asked if you want to generate a basic test script.
+
+## Generating Test Scripts (Optional)
+
+If you answer `'y'` during the code generation phase:
+
+*   A basic test file (e.g., `formats/myformat/myformat_test.go`) is generated.
+*   This file uses the first struct found in the YAML as an example and follows a `Write -> Read -> Verify` pattern.
+*   **Important:** You *must* adapt this generated test file. Fill in realistic sample data, implement the correct sequence of `Write` and `Read` calls for your specific format, and add appropriate verification logic using `reflect.DeepEqual` or `bytes.Equal`.
+
+**Directory Structure**
+
+*   `main.go`: Main application entry point, handles flags and orchestrates bootstrap/generation.
+*   `validator.go`: Contains YAML validation and reformation logic.
+*   `reset_generator.go`: Contains logic to clean generated files before regeneration.
+*   `generator/`: Package containing the core code generation logic.
+    *   `generator.go`: Parses YAML and executes templates.
+    *   `templates.go`: Go code template for generated structs and methods.
+    *   `test_template.go`: Go code template for generated test files.
+    *   `helpers.go`: Contains helper functions (e.g., `GetExpressionFunctions`) used by generated code.
+*   `application_structs/`: Defines the Go structs that represent the YAML structure.
+*   `sources/`: (You create this) Place your source `.yml` format definition files here.
+*   `formats/`: (Generated) Contains subdirectories for each generated format's Go code and reformed YAML.
+    *   `formats/myformat/`: Example directory for `myformat`.
+        *   `myformat.yml`: The validated and reformed YAML file.
+        *   `myheader.go`: Generated code for `MyHeader`.
+        *   `mypayload.go`: Generated code for `MyPayload`.
+        *   `myformat_test.go`: Generated test script template.
+*   `formats.json`: (Generated/Updated) Configuration file listing known formats, their source YAML paths, and output directories.
+
+**Limitations and TODOs**
+
+*   **Complex Repeating Structures:** The generator currently doesn't automatically handle fields that represent a variable number of repeating structures based on a count field. This often requires manual loops within the `Read`/`Write` methods after generation.
+*   **End-of-Stream Reads:** Formats where data continues until the end of the stream or a specific marker (like JPEG entropy-coded data) cannot be handled automatically by the `length` attribute and require manual implementation.
+*   **Advanced Validation:** The static validation of `length` and `condition` expressions is basic. Complex expressions might pass validation but fail at runtime if incorrect. Runtime error handling in generated code is present but could be enhanced.
+*   **Error Handling:** While basic error checking is generated, more nuanced error handling might be needed for production use.
+
+**Contributing**
+
+Contributions are welcome! Please feel free to submit issues or pull requests.

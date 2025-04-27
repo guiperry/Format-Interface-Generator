@@ -1,4 +1,4 @@
-package main
+package bmp_test
 
 import (
 	"bytes" // Import bytes package for comparison
@@ -8,6 +8,7 @@ import (
 	"os"
 	"reflect" // Import reflect package for DeepEqual
 	"testing" // Import testing package
+	"FormatModules/formats/bmp"
 
 	
 )
@@ -48,7 +49,7 @@ func TestGeneratedCode(t *testing.T) { // Changed to a test function
 	fileSize := dataOffset + pixelDataSize
 
 	// Create instances with test data
-	originalHeader := FileHeader{
+	originalHeader := bmp.FileHeader{
 		Signature:  "BMP",
 		FileSize:   fileSize,
 		Reserved1:  0, // Assuming Reserved1/2 based on typical BMP structure
@@ -57,7 +58,7 @@ func TestGeneratedCode(t *testing.T) { // Changed to a test function
 	}
 
 	// Initialize InfoHeader with all standard fields
-	originalInfoHeader := InfoHeader{
+	originalInfoHeader := bmp.InfoHeader{
 		HeaderSize:      dibHeaderSize, // Standard BITMAPINFOHEADER size (40)
 		Width:           uint32(testWidth),
 		Height:          uint32(testHeight),
@@ -139,8 +140,8 @@ func TestGeneratedCode(t *testing.T) { // Changed to a test function
 	}
 
 	var readErr error
-	readHeader := FileHeader{}
-	readInfoHeader := InfoHeader{}
+	readHeader := bmp.FileHeader{}
+	readInfoHeader := bmp.InfoHeader{}
 	var readPixelData []byte
 
 	func() {
@@ -150,13 +151,13 @@ func TestGeneratedCode(t *testing.T) { // Changed to a test function
 			}
 		}()
 
-		if readErr = readHeader.Read(readFile); readErr != nil {
+		if readErr = readHeader.Read(readFile, nil); readErr != nil {
 			readErr = fmt.Errorf("error reading header: %w", readErr)
 			return
 		}
 		log.Println("-> Header read.")
 
-		if readErr = readInfoHeader.Read(readFile); readErr != nil {
+		if readErr = readInfoHeader.Read(readFile, nil); readErr != nil {
 			readErr = fmt.Errorf("error reading info header: %w", readErr)
 			return
 		}
