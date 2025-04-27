@@ -17,7 +17,7 @@ import (
 	"strings"
 	"text/template"
 
-	"FormatModules/application_structs"
+	"FIG/app_structs"
 
 	 
 	"gopkg.in/yaml.v2"
@@ -28,7 +28,7 @@ type TemplateData struct {
 	PackageName      string
 	Imports          []string
 	StructName       string
-	Fields           []application_structs.Field
+	Fields           []app_structs.Field
 	FieldMap         map[string]string
 	VersionFieldPath string // Path to the version field
 	// Flags to control variable declarations in the template
@@ -47,14 +47,7 @@ func atoi(s string) int {
 // ExpectedStruct removed
 // parseStubFileForExpectedStructs removed
 
-// isValidLengthExpression remains the same (used by bootstrap now, but keep accessible)
-func IsValidLengthExpression(expr string) bool {
-	trimmed := strings.TrimSpace(expr)
-	if trimmed == "" || trimmed == "..." {
-		return false // Empty or placeholder is invalid here
-	}
-	return true
-}
+
 
 // GenerateCode takes the YAML description, generates Go code, and handles imports dynamically.
 // Assumes YAML is pre-validated. targetStubName is ignored.
@@ -70,7 +63,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 	log.Println("Successfully read YAML file.")
 
 	// 2. Unmarshal the YAML data
-	var fileFormat application_structs.FileFormat
+	var fileFormat app_structs.FileFormat
 	err = yaml.Unmarshal(data, &fileFormat)
 	if err != nil {
 		yamlErr, ok := err.(*yaml.TypeError)
@@ -93,12 +86,12 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 	// ... (template parsing logic remains the same) ...
 	tmpl := template.New("struct").Funcs(template.FuncMap{
 		"atoi": atoi,
-		"isExpressionLength": func(f application_structs.Field) bool {
+		"isExpressionLength": func(f app_structs.Field) bool {
 			// Check if it's not an integer and not empty/placeholder
 			_, err := strconv.Atoi(f.Length)
 			return err != nil && f.Length != "" && f.Length != "NEEDS_MANUAL_LENGTH"
 		},
-		"isConditional": func(f application_structs.Field) bool {
+		"isConditional": func(f app_structs.Field) bool {
 			return f.IsConditional()
 		},
 		"generateConditionCheck": func(condition string) string {
@@ -106,7 +99,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 			return condition
 		},
 		// Add a helper to check for the manual length placeholder
-		"needsManualLength": func(f application_structs.Field) bool {
+		"needsManualLength": func(f app_structs.Field) bool {
 			return f.Length == "NEEDS_MANUAL_LENGTH"
 		},
 	})
@@ -199,7 +192,7 @@ func GenerateCode(yamlFile, outputDir, packageName, targetStubName string) error
 		if needsGeneratorHelpers {
 			// Assuming GetExpressionFunctions is in the 'generator' package
 			// Adjust if moved to a different shared package
-			requiredImports["FormatModules/generator"] = true
+			requiredImports["FIG/utils"] = true
 		}
 
 

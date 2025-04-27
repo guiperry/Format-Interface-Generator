@@ -168,4 +168,4 @@ type TestTemplateData struct {
 	GoModulePath    string // The Go module path (e.g., "github.com/yourname/project")
 }
 
-// ... (main function, runBootstrap, runGeneration, helpers) ...
+

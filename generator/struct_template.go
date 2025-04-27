@@ -55,7 +55,7 @@ func (s *{{.StructName}}) Read(r io.Reader, ctx interface{}) error {
 				{{else if isExpressionLength $field}}
 		// Dynamic length string field: {{$field.Name}} using expression: {{$field.Length}}
 		expressionStr := ` + "`{{$field.Length}}`" + `
-		expression, errExpr := govaluate.NewEvaluableExpressionWithFunctions(expressionStr, generator.GetExpressionFunctions()) // Use helpers from generator pkg
+		expression, errExpr := govaluate.NewEvaluableExpressionWithFunctions(expressionStr, utils.GetExpressionFunctions()) // Use helpers from generator pkg
 		if errExpr != nil {
 			return fmt.Errorf("parsing length expression for conditional field {{$field.Name}} ('%s'): %w", expressionStr, errExpr)
 		}
@@ -97,7 +97,7 @@ func (s *{{.StructName}}) Read(r io.Reader, ctx interface{}) error {
 				{{else if isExpressionLength $field}}
 		// Dynamic length []byte field: {{$field.Name}} using expression: {{$field.Length}}
 		expressionStr := ` + "`{{$field.Length}}`" + `
-		expression, errExpr := govaluate.NewEvaluableExpressionWithFunctions(expressionStr, generator.GetExpressionFunctions()) // Use helpers
+		expression, errExpr := govaluate.NewEvaluableExpressionWithFunctions(expressionStr, utils.GetExpressionFunctions()) // Use helpers
 		if errExpr != nil { return fmt.Errorf("parsing length expression for conditional field {{$field.Name}} ('%s'): %w", expressionStr, errExpr) }
 		parameters := map[string]interface{}{"s": s, "ctx": ctx}
 		evalResult, errEval := expression.Evaluate(parameters)
@@ -155,7 +155,7 @@ func (s *{{.StructName}}) Read(r io.Reader, ctx interface{}) error {
 				{{else if isExpressionLength $field}}
 		// Dynamic length string field: {{$field.Name}} using expression: {{$field.Length}}
 		expressionStr := ` + "`{{$field.Length}}`" + `
-		expression, errExpr := govaluate.NewEvaluableExpressionWithFunctions(expressionStr, generator.GetExpressionFunctions()) // Use helpers
+		expression, errExpr := govaluate.NewEvaluableExpressionWithFunctions(expressionStr, utils.GetExpressionFunctions()) // Use helpers
 		if errExpr != nil { return fmt.Errorf("parsing length expression for {{$field.Name}} ('%s'): %w", expressionStr, errExpr) }
 		parameters := map[string]interface{}{"s": s, "ctx": ctx}
 		evalResult, errEval := expression.Evaluate(parameters)
@@ -193,7 +193,7 @@ func (s *{{.StructName}}) Read(r io.Reader, ctx interface{}) error {
 				{{else if isExpressionLength $field}}
 		// Dynamic length []byte field: {{$field.Name}} using expression: {{$field.Length}}
 		expressionStr := ` + "`{{$field.Length}}`" + `
-		expression, errExpr := govaluate.NewEvaluableExpressionWithFunctions(expressionStr, generator.GetExpressionFunctions()) // Use helpers
+		expression, errExpr := govaluate.NewEvaluableExpressionWithFunctions(expressionStr, utils.GetExpressionFunctions()) // Use helpers
 		if errExpr != nil { return fmt.Errorf("parsing length expression for {{$field.Name}} ('%s'): %w", expressionStr, errExpr) }
 		parameters := map[string]interface{}{"s": s, "ctx": ctx}
 		evalResult, errEval := expression.Evaluate(parameters)

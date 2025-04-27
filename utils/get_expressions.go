@@ -1,7 +1,8 @@
-package generator
+package utils
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/knetic/govaluate"
 )
@@ -50,4 +51,13 @@ func GetExpressionFunctions() map[string]govaluate.ExpressionFunction {
 			return float64(totalSize), nil // Return as float64 for govaluate
 		},
 	}
+}
+
+// isValidLengthExpression remains the same (used by bootstrap now, but keep accessible)
+func IsValidLengthExpression(expr string) bool {
+	trimmed := strings.TrimSpace(expr)
+	if trimmed == "" || trimmed == "..." {
+		return false // Empty or placeholder is invalid here
+	}
+	return true
 }

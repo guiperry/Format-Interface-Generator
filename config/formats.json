@@ -6,7 +6,7 @@
     "packageName": "bmp"
   },
   {
-    "name": "Jpg",
+    "name": "JPG",
     "yamlFile": "sources/jpg.yml",
     "outputDir": "formats/jpg",
     "packageName": "jpg"

@@ -219,7 +219,7 @@ func GetExpressionFunctions() map[string]govaluate.ExpressionFunction {
 *   **Goal:** Ensure the `govaluate` import and potentially the `GetExpressionFunctions` helper are available to the generated code.
 *   **Change:**
     *   Modify the import calculation logic to add `"github.com/knetic/govaluate"` and the package containing `GetExpressionFunctions` (if separate) whenever `isExpressionLength` is true for any field.
-    *   Ensure `GetExpressionFunctions` is accessible (see note in step 3). If placing it in a shared package (e.g., `FormatModules/exprhelpers`), add that import too.
+    *   Ensure `GetExpressionFunctions` is accessible (see note in step 3). If placing it in a shared package (e.g., `FIG/exprhelpers`), add that import too.
 
 ```go
 // generator/generator.go (Inside the loop processing structs)
@@ -242,7 +242,7 @@ for _, field := range structDef.Fields {
 if needsBinary { requiredImports["encoding/binary"] = true }
 if needsFmt || len(structDef.Fields) > 0 { requiredImports["fmt"] = true }
 if needsGovaluate { requiredImports["github.com/knetic/govaluate"] = true }
-if needsExprHelpers { requiredImports["FormatModules/exprhelpers"] = true } // Adjust path if needed
+if needsExprHelpers { requiredImports["FIG/exprhelpers"] = true } // Adjust path if needed
 
 // ... rest of import list generation ...
 

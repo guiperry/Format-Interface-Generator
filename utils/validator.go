@@ -1,5 +1,5 @@
 // validator.go
-package main
+package utils
 
 import (
 	"fmt"
@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"FormatModules/application_structs"
-	"FormatModules/generator"
+	"FIG/app_structs"
+	
 
 	"github.com/knetic/govaluate"
 	"github.com/mitchellh/mapstructure" // Import mapstructure
@@ -31,7 +31,7 @@ func lowercaseFieldKeysRecursive(data interface{}) interface{} {
 	originalValue := reflect.ValueOf(data)
 	kind := originalValue.Kind()
 
-	// Define the keys that correspond to the application_structs.Field tags
+	// Define the keys that correspond to the app_structs.Field tags
 	knownFieldKeys := map[string]bool{
 		"name":        true,
 		"type":        true,
@@ -90,7 +90,6 @@ func lowercaseFieldKeysRecursive(data interface{}) interface{} {
 	}
 }
 
-
 // ValidateAndReformYAML reads the original YAML, handles key case-insensitivity,
 // validates/reforms values, and saves the result to the target path.
 // It returns the path to the saved reformed YAML file.
@@ -124,12 +123,12 @@ func ValidateAndReformYAML(originalYAMLPath, outputDir string) (string, error) {
 
 	// --- 5. Decode the modified map directly into the struct using mapstructure ---
 	log.Printf("Decoding normalized map into struct for %s...", originalYAMLPath)
-	var fileFormat application_structs.FileFormat
+	var fileFormat app_structs.FileFormat
 	// Configure mapstructure to use the 'yaml' tag
 	config := &mapstructure.DecoderConfig{
-		Metadata: nil,
-		Result:   &fileFormat,
-		TagName:  "yaml", // Tell mapstructure to use the 'yaml' tags
+		Metadata:         nil,
+		Result:           &fileFormat,
+		TagName:          "yaml", // Tell mapstructure to use the 'yaml' tags
 		WeaklyTypedInput: true,
 	}
 	decoder, err := mapstructure.NewDecoder(config)
@@ -142,7 +141,6 @@ func ValidateAndReformYAML(originalYAMLPath, outputDir string) (string, error) {
 		return "", fmt.Errorf("error decoding normalized map to struct for %s: %w", originalYAMLPath, err)
 	}
 	log.Printf("Successfully decoded normalized map for %s.", originalYAMLPath)
-
 
 	// --- Steps 5 & 6 (Marshal/Unmarshal normalized bytes) are REMOVED ---
 	// We now directly decode the map in the new Step 5 above.
@@ -184,11 +182,11 @@ func ValidateAndReformYAML(originalYAMLPath, outputDir string) (string, error) {
 						validationErrors++
 					}
 				} else { // Not an integer, assume expression or placeholder
-					if !generator.IsValidLengthExpression(field.Length) { // Checks for empty, "..."
+					if !IsValidLengthExpression(field.Length) { // Checks for empty, "..."
 						log.Printf("ERROR: Validation error in struct '%s': field '%s' has invalid 'Length: %s'. Must be a positive integer or a valid Go expression (cannot be empty or '...')", structName, field.Name, field.Length)
 						validationErrors++
 					} else if field.Length != "NEEDS_MANUAL_LENGTH" { // Don't try to validate our placeholder
-						_, errExpr := govaluate.NewEvaluableExpressionWithFunctions(field.Length, generator.GetExpressionFunctions())
+						_, errExpr := govaluate.NewEvaluableExpressionWithFunctions(field.Length, GetExpressionFunctions())
 						if errExpr != nil {
 							log.Printf("Warning: Field '%s.%s' has expression length '%s' that may not be fully validatable statically: %v",
 								structName, field.Name, field.Length, errExpr)
@@ -222,7 +220,6 @@ func ValidateAndReformYAML(originalYAMLPath, outputDir string) (string, error) {
 		}
 		fileFormat.Structs[structName] = tempStructDef // Update map with potentially modified struct
 	}
-
 
 	if validationErrors > 0 {
 		return "", fmt.Errorf("found %d critical validation error(s) in %s (after key normalization). Please fix the original YAML", validationErrors, originalYAMLPath)

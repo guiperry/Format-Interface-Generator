@@ -1,4 +1,4 @@
-module FormatModules
+module FIG
 
 go 1.23.1
 

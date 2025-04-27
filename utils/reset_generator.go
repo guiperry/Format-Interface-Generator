@@ -1,5 +1,5 @@
 // reset_generator.go
-package main
+package utils
 
 import (
 	"io/ioutil"
@@ -10,7 +10,7 @@ import (
 )
 
 // reset cleans the target directory of generated .go files.
-func reset(targetDir string) { // Simplified parameters
+func Reset(targetDir string) { // Simplified parameters
 	log.Printf("Starting generator reset for directory: %s", targetDir)
 
 	// --- Stub renaming logic removed ---

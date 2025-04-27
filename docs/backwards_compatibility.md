@@ -48,14 +48,14 @@ structs:
   condition: "Version >= 20.2.0.7 && HasTangents" # Condition involving version and another bool field
 ```
 
-**3. Update `application_structs/structs.go`:**
+**3. Update `app_structs/structs.go`:**
 
 *   Add the `Condition` field to `Field`.
 *   Potentially add a `VersionFieldPath` to `FileFormat` to store the path (e.g., `"Header.Version"`) to the version field.
 
 ```go
 // project/structs/structs.go
-package application_structs
+package app_structs
 
 import (
     "fmt"
@@ -108,7 +108,7 @@ type TemplateData struct {
     PackageName      string
     Imports          []string
     StructName       string
-    Fields           []application_structs.Field // Pass the full field struct
+    Fields           []app_structs.Field // Pass the full field struct
     FieldMap         map[string]string
     VersionFieldPath string // Pass the path to the version field
     NeedsErrVarRead  bool
@@ -120,11 +120,11 @@ type TemplateData struct {
 // Modify template function registration
 tmpl := template.New("struct").Funcs(template.FuncMap{
     "atoi": atoi,
-    "isExpressionLength": func(f application_structs.Field) bool {
+    "isExpressionLength": func(f app_structs.Field) bool {
         return f.IsExpressionLength()
     },
     // Add a function to check if a field is conditional
-    "isConditional": func(f application_structs.Field) bool {
+    "isConditional": func(f app_structs.Field) bool {
         return f.IsConditional()
     },
     // Function to generate the Go condition check (simplistic version)

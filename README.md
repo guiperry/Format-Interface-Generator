@@ -1,8 +1,8 @@
-# FormatModule - Binary Format Code Generator
+# Format Interface Generator (FIG) - Binary Format Code Generator
 
 ## Overview
 
-FormatModule is a Go application designed to automate the creation of Go code for reading and writing binary file formats. By defining the structure of a file format in a simple YAML file, this tool generates Go structs along with corresponding `Read` and `Write` methods, significantly reducing boilerplate code and potential errors when dealing with binary data serialization and deserialization.
+Format Interface Generator (FIG) is a Go application designed to automate the creation of Go code for reading and writing binary file formats. By defining the structure of a file format in a simple YAML file, this tool generates Go structs along with corresponding `Read` and `Write` methods, significantly reducing boilerplate code and potential errors when dealing with binary data serialization and deserialization.
 
 ## Features
 
@@ -32,7 +32,7 @@ FormatModule is a Go application designed to automate the creation of Go code fo
 1.  Clone the repository:
     ```bash
     git clone <your-repository-url>
-    cd FormatModule
+    cd FIG
     ```
 2.  Ensure dependencies are downloaded (if any beyond the standard library and included vendors):
     ```bash
@@ -100,7 +100,7 @@ structs:
 *   **`condition`:** (Optional) A Go expression string. If present, the field is only read/written if the condition evaluates to true at runtime. Use `s.` to refer to fields within the same struct.
 *   **`tags`:** (Optional) A string containing Go struct tags to be added to the generated field (e.g., ``json:"myName" xml:"name"``).
 
-## Bootstrapping Formats
+### 2. Bootstrapping Formats
 
 The bootstrap phase validates your source YAML, reforms it (handling case and placeholders), saves the reformed version, and updates the `formats.json` configuration.
 
@@ -117,7 +117,7 @@ The bootstrap phase validates your source YAML, reforms it (handling case and pl
     *   The reformed YAML is saved (e.g., `formats/myformat/myformat.yml`).
     *   `formats.json` is updated with the format's configuration.
 
-## Generating Code
+### 3. Generating Code
 
 This phase generates the Go code based on the reformed YAML files listed in `formats.json`.
 
@@ -135,7 +135,7 @@ This phase generates the Go code based on the reformed YAML files listed in `for
     *   Go files (e.g., `formats/myformat/myheader.go`, `formats/myformat/mypayload.go`) are generated.
     *   You will be asked if you want to generate a basic test script.
 
-## Generating Test Scripts (Optional)
+### 4. Generating Test Scripts (Optional)
 
 If you answer `'y'` during the code generation phase:
 
@@ -153,7 +153,7 @@ If you answer `'y'` during the code generation phase:
     *   `templates.go`: Go code template for generated structs and methods.
     *   `test_template.go`: Go code template for generated test files.
     *   `helpers.go`: Contains helper functions (e.g., `GetExpressionFunctions`) used by generated code.
-*   `application_structs/`: Defines the Go structs that represent the YAML structure.
+*   `app_structs/`: Defines the Go structs that represent the YAML structure.
 *   `sources/`: (You create this) Place your source `.yml` format definition files here.
 *   `formats/`: (Generated) Contains subdirectories for each generated format's Go code and reformed YAML.
     *   `formats/myformat/`: Example directory for `myformat`.
