@@ -1,0 +1,62 @@
+name: BMP
+description: A full BMP file format.
+structs:
+  FileHeader:
+    fields:
+    - name: Signature
+      type: string
+      description: BMP Signature (BMP)
+      length: "2"
+    - name: FileSize
+      type: uint32
+      description: Total file size
+    - name: Reserved1
+      type: uint16
+      description: Reserved (0)
+    - name: Reserved2
+      type: uint16
+      description: Reserved (0)
+    - name: DataOffset
+      type: uint32
+      description: Offset to image data
+  ImageData:
+    fields:
+    - name: PixelData
+      type: '[]byte'
+      description: RGB pixel data with padding
+      length: CalculatePaddedSize(s.Width, s.Height, s.BitsPerPixel)
+  InfoHeader:
+    fields:
+    - name: HeaderSize
+      type: uint32
+      description: Size of the information header (40)
+    - name: Width
+      type: uint32
+      description: Image width
+    - name: Height
+      type: uint32
+      description: Image height
+    - name: Planes
+      type: uint16
+      description: Number of color planes (always 1)
+    - name: BitsPerPixel
+      type: uint16
+      description: Bits per pixel (e.g., 24 for RGB)
+    - name: Compression
+      type: uint32
+      description: Compression method (0 for uncompressed)
+    - name: ImageSize
+      type: uint32
+      description: Size of the raw pixel data (can be 0 for uncompressed)
+    - name: XPixelsPerMeter
+      type: int32
+      description: Horizontal resolution (pixels per meter)
+    - name: YPixelsPerMeter
+      type: int32
+      description: Vertical resolution (pixels per meter)
+    - name: ColorsUsed
+      type: uint32
+      description: Number of colors in the color palette (0 for true-color images)
+    - name: ImportantColors
+      type: uint32
+      description: Number of important colors (0 for all colors important)

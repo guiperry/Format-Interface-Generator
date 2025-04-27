@@ -6,7 +6,7 @@ structs:
       - name: Signature
         type: string
         length: 2
-        description: "BMP Signature (BM)"
+        description: "BMP Signature (BMP)"
       - name: FileSize
         type: uint32
         description: Total file size

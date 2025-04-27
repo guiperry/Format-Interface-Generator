@@ -26,6 +26,7 @@ type Field struct {
 	// It's used for fixed-size strings, byte slices, or dynamic lengths
 	Length    string `yaml:"length,omitempty"`
 	Condition string `yaml:"condition,omitempty"` // Condition for reading/writing
+	Tags        string `yaml:"tags,omitempty"`
 }
 
 func (f *Field) GetLength() (int, error) {

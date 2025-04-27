@@ -1,0 +1,128 @@
+# jpg.yml - Defines the structure of a JPEG file
+
+# Optional: If there's a common way to determine the format version (e.g., from APP0)
+# version_field_path: "APP0Payload.VersionMajor"
+
+structs:
+  # --- Marker Segments (Often just the marker itself) ---
+  SOI: # Start Of Image
+    fields:
+      - Name: Marker
+        Type: uint16
+        Value: 0xFFD8 # Fixed value, might be handled outside generated code
+
+  EOI: # End Of Image
+    fields:
+      - Name: Marker
+        Type: uint16
+        Value: 0xFFD9 # Fixed value
+
+  # --- Segments with Payloads ---
+  GenericSegment: # For reading segment marker and length before dispatching
+    fields:
+      - Name: Marker
+        Type: uint16
+        Description: "Segment marker (e.g., 0xFFE0 for APP0)"
+      - Name: Length
+        Type: uint16
+        Description: "Length of the segment payload (including the length field itself)"
+      - Name: Payload
+        Type: "[]byte"
+        Description: "The actual segment data, excluding the marker"
+        # Length is calculated dynamically based on the Length field read above
+        Length: "s.Length - 2" # Length field includes its own 2 bytes
+
+  APP0Payload: # JFIF Application Segment Payload
+    fields:
+      - Name: Identifier
+        Type: string
+        Length: 5 # "JFIF\x00"
+        Description: "Should be 'JFIF' followed by a null terminator"
+      - Name: VersionMajor
+        Type: uint8
+        Description: "JFIF Major version number"
+      - Name: VersionMinor
+        Type: uint8
+        Description: "JFIF Minor version number"
+      - Name: DensityUnits
+        Type: uint8
+        Description: "Units for Xdensity and Ydensity (0: no units, 1: pixels per inch, 2: pixels per cm)"
+      - Name: Xdensity
+        Type: uint16
+        Description: "Horizontal pixel density"
+      - Name: Ydensity
+        Type: uint16
+        Description: "Vertical pixel density"
+      - Name: Xthumbnail
+        Type: uint8
+        Description: "Thumbnail horizontal pixel count"
+      - Name: Ythumbnail
+        Type: uint8
+        Description: "Thumbnail vertical pixel count"
+      # Thumbnail data follows, length depends on Xthumbnail * Ythumbnail * 3 (RGB)
+      # This part often needs manual handling or a more complex Length expression
+      # - Name: ThumbnailData
+      #   Type: "[]byte"
+      #   Length: "s.Xthumbnail * s.Ythumbnail * 3" # Example, assuming RGB
+
+  DQTPayload: # Define Quantization Table Payload
+    fields:
+      # The DQT payload structure repeats. A single field might read the whole payload,
+      # or you might need custom logic to parse repeating (Precision/Index, TableData) pairs.
+      # For simplicity, reading the raw payload might be easier initially.
+      - Name: QuantizationData
+        Type: "[]byte"
+        Description: "Raw data containing precision/index and table values"
+        # Length needs to be passed via context or read until segment end
+        Length: "ctx.SegmentLength - 2" # Example: Assuming segment length passed in context
+
+  SOF0Payload: # Start Of Frame (Baseline DCT) Payload
+    fields:
+      - Name: Precision
+        Type: uint8
+        Description: "Sample precision (usually 8 bits)"
+      - Name: Height
+        Type: uint16
+        Description: "Image height in pixels"
+      - Name: Width
+        Type: uint16
+        Description: "Image width in pixels"
+      - Name: NumberOfComponents
+        Type: uint8
+        Description: "Number of image components (e.g., 1 for grayscale, 3 for YCbCr)"
+      # Component specification follows, repeats NumberOfComponents times
+      # This requires custom loop logic in the Read method, not easily generated automatically.
+      # Reading the rest as raw bytes might be a starting point.
+      - Name: ComponentData
+        Type: "[]byte"
+        Description: "Raw data for component specifications (ID, Sampling Factors, QT Index)"
+        Length: "s.NumberOfComponents * 3" # Each component spec is 3 bytes
+
+  DHTPayload: # Define Huffman Table Payload
+    fields:
+      # Similar to DQT, the payload contains repeating table definitions.
+      # Reading the raw payload is often the simplest generated approach.
+      - Name: HuffmanData
+        Type: "[]byte"
+        Description: "Raw data containing table class/index, code counts, and values"
+        Length: "ctx.SegmentLength - 2" # Example: Assuming segment length passed in context
+
+  SOSPayload: # Start Of Scan Payload
+    fields:
+      - Name: Ns # Number of components in scan
+        Type: uint8
+        Description: "Number of image components in scan"
+      # Component selectors follow (Ns * 2 bytes)
+      # Spectral selection start/end (1 byte each)
+      # Successive approximation bit positions (1 byte)
+      # Total header size = 1 (Ns) + Ns*2 + 1 (Ss) + 1 (Se) + 1 (Ah/Al) = Ns*2 + 4
+      - Name: ScanHeader
+        Type: "[]byte"
+        Description: "Component selectors (Csj, Tdj/Taj), Spectral selection (Ss, Se), Approx. bits (Ah, Al)"
+        Length: "s.Ns * 2 + 4" # Corrected Length based on Ns field
+      # Entropy-coded data follows until the next marker. This cannot be determined by a simple length field.
+      # The generator likely cannot handle this automatically. It requires reading until a marker is found.
+      # You might omit this field from YAML or mark it for manual handling.
+      # - Name: EntropyCodedData
+      #   Type: "[]byte"
+      #   Length: "manual" # Or omit, indicating manual read logic is needed

@@ -1,0 +1,8 @@
+[
+  {
+    "name": "Bmp",
+    "yamlFile": "sources/bmp.yml",
+    "outputDir": "formats/bmp",
+    "packageName": "bmp"
+  }
+]
