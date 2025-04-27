@@ -13,6 +13,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"text/template"
+	"os/exec" // For running 'go list'
+	"gopkg.in/yaml.v2" // For parsing YAML in test generation
+	"bytes"
+	"go/format" // For formatting generated code
 
 	// Keep other necessary imports
 	"FormatModules/generator"
@@ -192,6 +197,17 @@ func runGeneration(configPath string) {
 
 	log.Printf("Processing %d selected format(s) for generation.", len(selectedConfigs))
 
+	// --- Get Go Module Path (Needed for test import) ---
+	goModulePath, err := getGoModulePath()
+	if err != nil {
+		log.Printf("Warning: Could not determine Go module path: %v. Test imports might be incorrect.", err)
+		// You could potentially ask the user for it here if needed
+	}
+	// --- End Get Go Module Path ---
+
+
+	reader := bufio.NewReader(os.Stdin) // Reader for user input
+
 	for _, config := range selectedConfigs {
 		log.Printf("--- Processing format: %s ---", config.Name)
 
@@ -201,37 +217,46 @@ func runGeneration(configPath string) {
 		log.Println("Reset complete.")
 
 		// --- Determine Reformed YAML Path ---
-		// The reformed YAML should have been created during bootstrap (or a previous run)
 		reformedYamlPath := filepath.Join(config.OutputDir, filepath.Base(config.YAMLFile))
 		if _, err := os.Stat(reformedYamlPath); os.IsNotExist(err) {
-			// Attempt to validate/reform on the fly if missing (e.g., if bootstrap wasn't run after changes)
 			log.Printf("Warning: Reformed YAML %s not found. Attempting validation/reformation...", reformedYamlPath)
 			reformedYamlPath, err = ValidateAndReformYAML(config.YAMLFile, config.OutputDir)
 			if err != nil {
 				log.Printf("ERROR: On-the-fly validation/reformation failed for %s: %v. Skipping generation.", config.Name, err)
-				continue // Skip this format
+				continue
 			}
 		} else {
 			log.Printf("Using reformed YAML: %s", reformedYamlPath)
 		}
 
-
 		// --- Generate Code ---
 		log.Println("Starting code generation...")
-		// Ensure output directory exists (might have been cleaned)
 		if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
 			log.Printf("ERROR: Failed to ensure output directory %s exists: %v. Skipping generation.", config.OutputDir, err)
 			continue
 		}
 
-		// Call generator with the reformed YAML path
-		err = generator.GenerateCode(reformedYamlPath, config.OutputDir, config.PackageName, "") // Pass empty string for stub name
+		err = generator.GenerateCode(reformedYamlPath, config.OutputDir, config.PackageName, "")
 		if err != nil {
 			log.Printf("ERROR: %s: Error generating code: %v", config.Name, err)
-			// Continue to next format even if one fails
-		} else {
-			log.Printf("%s: Code generation completed successfully.", config.Name)
+			continue // Skip test generation if code generation failed
 		}
+		log.Printf("%s: Code generation completed successfully.", config.Name)
+
+		// --- Ask to Generate Test Script ---
+		fmt.Printf("Generate basic test script for %s? (y/N): ", config.Name)
+		response, _ := reader.ReadString('\n')
+		if strings.EqualFold(strings.TrimSpace(response), "y") {
+			log.Printf("Generating test script for %s...", config.Name)
+			err := generateTestScript(reformedYamlPath, config.OutputDir, config.PackageName, goModulePath)
+			if err != nil {
+				log.Printf("ERROR: Failed to generate test script for %s: %v", config.Name, err)
+			} else {
+				log.Printf("Successfully generated test script: %s", filepath.Join(config.OutputDir, config.PackageName+"_test.go"))
+			}
+		}
+		// --- End Test Script Generation ---
+
 		fmt.Println("---") // Separator between formats
 	}
 
@@ -373,4 +398,90 @@ func showConfigSelection(formatConfigs []FormatConfig) ([]FormatConfig, error) {
 		}
 	}
 	return uniqueConfigs, nil
+}
+func generateTestScript(reformedYamlPath, outputDir, packageName, goModulePath string) error {
+	// 1. Parse the reformed YAML to find struct names
+	yamlData, err := ioutil.ReadFile(reformedYamlPath)
+	if err != nil {
+		return fmt.Errorf("failed to read reformed YAML %s: %w", reformedYamlPath, err)
+	}
+
+	// Use a temporary struct to get just the struct keys
+	var tempFormat struct {
+		Structs map[string]interface{} `yaml:"structs"`
+	}
+	err = yaml.Unmarshal(yamlData, &tempFormat)
+	if err != nil {
+		return fmt.Errorf("failed to parse structs from reformed YAML %s: %w", reformedYamlPath, err)
+	}
+
+	if len(tempFormat.Structs) == 0 {
+		return fmt.Errorf("no structs found in reformed YAML %s, cannot generate test", reformedYamlPath)
+	}
+
+	// Get struct names and sort them alphabetically for consistency
+	structNames := make([]string, 0, len(tempFormat.Structs))
+	for name := range tempFormat.Structs {
+		structNames = append(structNames, name)
+	}
+	sort.Strings(structNames)
+	firstStructName := structNames[0] // Use the first one alphabetically
+
+	// 2. Prepare data for the test template
+	testData := generator.TestTemplateData{
+		PackageName:     packageName,
+		FormatDir:       filepath.Base(filepath.Dir(outputDir)), // e.g., "formats"
+		FirstStructName: firstStructName,
+		GoModulePath:    goModulePath,
+	}
+
+	// 3. Parse the test template
+	tmpl, err := template.New("test").Parse(generator.TestFileTemplate)
+	if err != nil {
+		return fmt.Errorf("failed to parse test template: %w", err)
+	}
+
+	// 4. Execute the template
+	var output bytes.Buffer
+	err = tmpl.Execute(&output, testData)
+	if err != nil {
+		return fmt.Errorf("failed to execute test template for %s: %w", packageName, err)
+	}
+
+	// 5. Format the generated code
+	formattedOutput, errFmt := format.Source(output.Bytes())
+	if errFmt != nil {
+		log.Printf("Warning: Failed to format generated test code for %s: %v. Writing unformatted code.", packageName, errFmt)
+		formattedOutput = output.Bytes() // Fallback
+	}
+
+	// 6. Write the test file
+	testFilePath := filepath.Join(outputDir, fmt.Sprintf("%s_test.go", packageName))
+	err = ioutil.WriteFile(testFilePath, formattedOutput, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write test file %s: %w", testFilePath, err)
+	}
+
+	return nil
+}
+
+// --- NEW: Helper to get Go Module Path ---
+func getGoModulePath() (string, error) {
+	cmd := exec.Command("go", "list", "-m")
+	output, err := cmd.Output()
+	if err != nil {
+		// Try checking go.mod directly as a fallback
+		modData, readErr := ioutil.ReadFile("go.mod")
+		if readErr == nil {
+			lines := strings.Split(string(modData), "\n")
+			for _, line := range lines {
+				if strings.HasPrefix(line, "module ") {
+					return strings.TrimSpace(strings.TrimPrefix(line, "module ")), nil
+				}
+			}
+		}
+		// If both fail, return the original error
+		return "", fmt.Errorf("failed to run 'go list -m' and couldn't parse go.mod: %w", err)
+	}
+	return strings.TrimSpace(string(output)), nil
 }
